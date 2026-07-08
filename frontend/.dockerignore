@@ -1,0 +1,5 @@
+# Fuera del contexto de build: node_modules del host (se reinstala con npm ci y,
+# sin esto, el COPY . . pisaría el del contenedor), el build y los secretos.
+node_modules/
+dist/
+.env

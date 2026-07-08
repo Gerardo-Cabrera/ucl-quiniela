@@ -1,0 +1,41 @@
+# Desarrollo. La base de datos es el PostgreSQL NATIVO del host (no un
+# contenedor): los datos viven en la instancia del sistema y no dependen de
+# Docker en absoluto. Setup único de la BD (rol + base):
+#
+#   psql -d postgres -c "CREATE ROLE quiniela LOGIN PASSWORD 'quiniela_pass'"
+#   psql -d postgres -c "CREATE DATABASE ucl_quiniela OWNER quiniela"
+#
+# (Para producción autocontenida en un servidor, ver docker-compose.prod.yml)
+
+services:
+  backend:
+    build: ./backend
+    restart: always
+    # Red del host: el contenedor alcanza el PostgreSQL local en localhost:5432
+    # y expone la API directamente en el puerto 8000 del host (sin "ports").
+    network_mode: host
+    env_file:
+      - ./backend/.env
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://quiniela:quiniela_pass@localhost:5432/ucl_quiniela
+    volumes:
+      - ./backend:/app
+    # Migraciones primero (idempotente): garantiza que las tablas existan.
+    command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+
+  frontend:
+    build:
+      context: ./frontend
+      # Red del host en el build: si la salida va por una VPN (MTU 1280), la red
+      # de build por defecto (MTU 1500) pierde paquetes grandes y `npm install`
+      # queda a medias. Heredar la MTU del host lo completa.
+      network: host
+    restart: always
+    ports:
+      - "5173:5173"
+    env_file:
+      - ./frontend/.env
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    command: npm run dev -- --host

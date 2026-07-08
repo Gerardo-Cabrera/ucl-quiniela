@@ -1,0 +1,31 @@
+# ── Python (backend) ─────────────────────────────
+__pycache__/
+*.py[cod]
+*.egg-info/
+venv/
+.venv/
+.pytest_cache/
+.ruff_cache/
+
+# ── Node (frontend) ──────────────────────────────
+node_modules/
+dist/
+
+# ── Entorno / secretos (se versiona solo .env.example) ──
+.env
+.env.*
+!.env.example
+
+# ── Base de datos / datos persistentes ───────────
+*.db
+*.sqlite
+data/
+
+# ── Logs ─────────────────────────────────────────
+*.log
+
+# ── Editores / SO ────────────────────────────────
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

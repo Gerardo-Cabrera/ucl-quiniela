@@ -1,0 +1,8 @@
+# Fuera del contexto de build (secretos, cachés y entornos locales).
+.env
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
