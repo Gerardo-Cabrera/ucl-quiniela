@@ -1,0 +1,179 @@
+{
+  "common": {
+    "loading": "Cargando...",
+    "vs": "vs",
+    "pts": "pts",
+    "dash": "—"
+  },
+  "brand": {
+    "name": "UCL",
+    "tagline": "QUINIELA 2026/27",
+    "edition": "UEFA Champions League 2026/27",
+    "copyright": "UEFA Champions League © 2026/27",
+    "appTitle": "UCL Quiniela 🏆"
+  },
+  "nav": {
+    "table": "Tabla",
+    "matches": "Partidos",
+    "predictions": "Pronósticos",
+    "top8": "Top 8",
+    "aciertos": "Aciertos",
+    "jornada": "Jornada",
+    "mvps": "MVPs",
+    "logout": "Salir"
+  },
+  "auth": {
+    "tabLogin": "Entrar",
+    "tabRegister": "Registrarse",
+    "yourTeam": "Nombre de tu equipo",
+    "teamPlaceholder": "Ej: Real Madrid C.F",
+    "alias": "Alias (opcional)",
+    "aliasPlaceholder": "Tu nombre de usuario",
+    "identifier": "Email, alias o equipo",
+    "identifierPlaceholder": "Email, alias o nombre de equipo",
+    "email": "Email",
+    "emailAria": "Correo electrónico",
+    "emailPlaceholder": "tu@email.com",
+    "password": "Contraseña",
+    "submitLogin": "Entrar a la Quiniela",
+    "submitRegister": "Crear cuenta",
+    "genericError": "Ocurrió un error. Intenta de nuevo.",
+    "errTeamShort": "El nombre de equipo debe tener al menos 3 caracteres.",
+    "errAliasShort": "El alias debe tener al menos 3 caracteres.",
+    "errEmailInvalid": "Introduce un correo electrónico válido.",
+    "errPasswordShort": "La contraseña debe tener al menos 6 caracteres."
+  },
+  "dashboard": {
+    "title": "Tabla General",
+    "yourPosition": "Tu posición",
+    "predictionsCount": "{{count}} pronósticos",
+    "points": "PUNTOS",
+    "classification": "Clasificación",
+    "you": "(tú)",
+    "legendMatches": "Partidos",
+    "legendTop8": "Top 8",
+    "emptyTitle": "Sin datos aún",
+    "emptyDescription": "Los puntos aparecerán cuando haya partidos finalizados."
+  },
+  "matches": {
+    "title": "Partidos",
+    "emptyTitle": "Sin partidos",
+    "emptyDescription": "No hay partidos para los filtros seleccionados.",
+    "overrideLabel": "Prórroga de pronósticos",
+    "overrideOn": "Activa: se pronostica hasta el inicio del primer partido del día.",
+    "overrideOff": "Los pronósticos cierran {{lead}} min antes del primer partido del día.",
+    "overrideAria": "Activar o desactivar la prórroga de pronósticos",
+    "filterAll": "Todos",
+    "phaseFilter": {
+      "league": "Liga",
+      "knockout_playoffs": "Play-offs",
+      "round_of_16": "8vos",
+      "quarter_finals": "Cuartos",
+      "semi_finals": "Semis",
+      "final": "Final"
+    },
+    "statusFilter": {
+      "scheduled": "Próximos",
+      "live": "En Vivo 🔴",
+      "finished": "Finalizados"
+    }
+  },
+  "matchCard": {
+    "yourPrediction": "Tu pronóstico:",
+    "exact": "✓ Exacto",
+    "predict": "Pronosticar",
+    "editPrediction": "Editar pronóstico",
+    "penalties": "pen {{home}}-{{away}}"
+  },
+  "predictions": {
+    "title": "Mis Pronósticos",
+    "subtitle": "{{count}} pronósticos registrados",
+    "ptsMatches": "PTS PARTIDOS",
+    "emptyTitle": "Sin pronósticos",
+    "emptyDescription": "Ve a la sección de Partidos para registrar tus pronósticos.",
+    "real": "Real: {{home}} - {{away}}",
+    "delete": "Eliminar pronóstico"
+  },
+  "predictionModal": {
+    "titleEdit": "Editar Pronóstico",
+    "titleNew": "Pronóstico",
+    "firstScorer": "⚽ Primer goleador (opcional)",
+    "loadingPlayers": "Cargando jugadores...",
+    "noSquads": "Plantillas aún no disponibles para este partido.",
+    "noPrediction": "— Sin pronóstico —",
+    "save": "Guardar Pronóstico",
+    "saving": "Guardando...",
+    "saved": "✓ Guardado",
+    "error": "Error al guardar. Intenta de nuevo."
+  },
+  "top8": {
+    "title": "Top 8",
+    "subtitle": "Los 8 equipos que terminan 1.º–8.º en la fase de liga (clasifican directo a octavos)",
+    "ptsTop8": "PTS TOP 8",
+    "pts3": "3 pts",
+    "pts5": "5 pts",
+    "pointsTeamOnly": "Equipo correcto (cualquier posición)",
+    "pointsExact": "Equipo en posición exacta",
+    "yourPrediction": "Tu Pronóstico",
+    "selectHint": "Selecciona equipos de la lista →",
+    "save": "Guardar Top 8",
+    "saving": "Guardando...",
+    "saved": "Guardado",
+    "locked": "🔒 Tu Top 8 ya fue calculado y no puede modificarse.",
+    "teamsTitle": "Equipos UCL",
+    "searchPlaceholder": "Buscar equipo..."
+  },
+  "aciertos": {
+    "title": "Aciertos",
+    "subtitle": "Primer goleador y marcador exacto",
+    "emptyTitle": "Sin aciertos aún",
+    "emptyDescription": "Aparecerán cuando haya partidos finalizados y puntuados.",
+    "firstScorer": "Primer goleador",
+    "exactScore": "Marcador exacto",
+    "firstScorerEmpty": "Nadie ha acertado el primer goleador todavía.",
+    "exactScoreEmpty": "Nadie ha acertado un marcador exacto todavía.",
+    "topScore": "Marcador más repetido",
+    "firstGoalByMatch": "Primer gol por partido",
+    "exactByMatch": "Marcador exacto por partido"
+  },
+  "jornada": {
+    "title": "Jornada",
+    "subtitle": "Puntos de cada participante por día",
+    "mvpLabel": "MVP",
+    "emptyTitle": "Sin jornadas puntuadas",
+    "emptyDescription": "Los puntos por jornada aparecerán cuando haya partidos finalizados."
+  },
+  "mvps": {
+    "title": "MVPs",
+    "subtitle": "El mejor de cada jornada",
+    "chronoTitle": "MVP por jornada",
+    "ranking": "Ranking de MVPs",
+    "rankingEmpty": "Aún no hay MVPs.",
+    "emptyTitle": "Sin jornadas aún",
+    "emptyDescription": "El MVP de cada día aparecerá cuando haya partidos puntuados."
+  },
+  "ranking": {
+    "empty": "Sin datos aún."
+  },
+  "phase": {
+    "league": "Fase de Liga",
+    "knockout_playoffs": "Play-offs",
+    "round_of_16": "Octavos de Final",
+    "quarter_finals": "Cuartos de Final",
+    "semi_finals": "Semifinales",
+    "final": "Final"
+  },
+  "status": {
+    "scheduled": "Programado",
+    "live": "En Vivo",
+    "finished": "Finalizado",
+    "postponed": "Pospuesto",
+    "liveBadge": "EN VIVO"
+  },
+  "error": {
+    "title": "Algo salió mal",
+    "unexpected": "Error inesperado en la aplicación.",
+    "retry": "Reintentar",
+    "retryAria": "Reintentar carga de la aplicación"
+  }
+}

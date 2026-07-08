@@ -1,0 +1,67 @@
+import { Crown } from "lucide-react";
+import { format } from "date-fns";
+import { es } from "date-fns/locale";
+import { useTranslation } from "react-i18next";
+import { useMatchdays } from "@/hooks";
+import { Card, Spinner, EmptyState, RankingCard } from "@/components/ui";
+import { isoDayToDate } from "@/lib/date";
+
+export default function Mvps() {
+  const { t } = useTranslation();
+  const { data, isLoading } = useMatchdays();
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Spinner size="lg" />
+      </div>
+    );
+  }
+
+  // Solo jornadas con MVP (partidos ya puntuados), de la más reciente a la más antigua.
+  const mvpDays = [...(data?.days ?? [])].reverse().filter((d) => d.mvps.length > 0);
+
+  if (!mvpDays.length) {
+    return <EmptyState icon="👑" title={t("mvps.emptyTitle")} description={t("mvps.emptyDescription")} />;
+  }
+
+  return (
+    <div className="space-y-6 animate-in">
+      <div>
+        <h1 className="font-display text-4xl text-ucl-gold">{t("mvps.title")}</h1>
+        <p className="text-ucl-silver/60 text-sm mt-1">{t("mvps.subtitle")}</p>
+      </div>
+
+      {/* MVP de cada jornada */}
+      <Card>
+        <h2 className="font-display text-xl mb-4 flex items-center gap-2">
+          <Crown size={18} className="text-ucl-gold" /> {t("mvps.chronoTitle")}
+        </h2>
+        <div className="space-y-2">
+          {mvpDays.map((d) => (
+            <div key={d.date} className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-ucl-blue/20">
+              <span className="text-xs text-ucl-silver/60 font-mono capitalize shrink-0 w-16">
+                {format(isoDayToDate(d.date), "d MMM", { locale: es })}
+              </span>
+              <span className="flex-1 min-w-0 text-sm font-medium text-ucl-gold truncate flex items-center gap-1.5">
+                <Crown size={13} className="shrink-0" /> {d.mvps.join(" · ")}
+              </span>
+              <span className="font-display text-lg text-ucl-gold shrink-0">
+                {d.mvp_points}<span className="text-xs text-ucl-silver/50 font-mono ml-1">{t("common.pts")}</span>
+              </span>
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      {/* Ranking de MVPs (veces como MVP) */}
+      <RankingCard
+        title={t("mvps.ranking")}
+        icon={<Crown size={18} className="text-ucl-gold" />}
+        rows={(data?.mvp_ranking ?? []).map((r) => ({ name: r.team_name, value: r.count }))}
+        valueSuffix="×"
+        emptyText={t("mvps.rankingEmpty")}
+      />
+    </div>
+  );
+}
