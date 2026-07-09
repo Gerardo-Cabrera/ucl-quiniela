@@ -1,5 +1,7 @@
 # 🏆 UCL Quiniela App
 
+[![CI](https://github.com/Gerardo-Cabrera/ucl-quiniela/actions/workflows/ci.yml/badge.svg)](https://github.com/Gerardo-Cabrera/ucl-quiniela/actions/workflows/ci.yml)
+
 Aplicación de quiniela basada en la UEFA Champions League con sistema de puntuación por fases.
 
 ## Stack
@@ -121,6 +123,19 @@ Dentro del contenedor (no requiere instalar nada en el host):
 ```bash
 docker compose exec backend pytest
 ```
+
+## Revisión de PRs (IA)
+
+Los PR se revisan con [PR-Agent](https://github.com/qodo-ai/pr-agent) (open-source)
+usando el **free tier** de Google Gemini (sin coste). Para activarlo:
+
+1. Crea una API key gratuita en [Google AI Studio](https://aistudio.google.com/apikey).
+2. Añádela como **secret** del repositorio `GEMINI_API_KEY`
+   (Settings → Secrets and variables → Actions → New repository secret).
+
+Sin ese secret, el workflow **se omite** (no falla). Ya activo, al abrir un PR
+genera resumen, revisión y sugerencias, y responde a comandos en los comentarios:
+`/review`, `/describe`, `/improve`, `/ask <pregunta>`.
 
 ## Sistema de Puntuación
 
