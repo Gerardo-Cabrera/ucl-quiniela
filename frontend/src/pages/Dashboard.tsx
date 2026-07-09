@@ -1,4 +1,4 @@
-import { Trophy, Target, Star } from "lucide-react";
+import { Trophy, Target, Star, Share2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useLeaderboard } from "@/hooks";
 import { Card, Spinner, EmptyState } from "@/components/ui";
@@ -30,6 +30,17 @@ export default function Dashboard() {
 
   const myEntry = leaderboard.find((e) => e.team_name === user?.team_name);
 
+  // Comparte la tabla como texto: WhatsApp (u otra app) se abre con el mensaje
+  // pre-cargado y el usuario elige el grupo. Reutiliza los datos ya mostrados.
+  const shareWhatsApp = () => {
+    const rows = leaderboard.map((e, i) => {
+      const label = i < 3 ? ["🥇", "🥈", "🥉"][i] : `${e.rank}.`;
+      return `${label} ${e.team_name} — ${e.total_points} ${t("common.pts")}`;
+    });
+    const text = `${t("brand.appTitle")} · ${t("dashboard.title")}\n\n${rows.join("\n")}`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank", "noopener,noreferrer");
+  };
+
   return (
     <div className="space-y-6 animate-in">
       {/* Header */}
@@ -60,9 +71,18 @@ export default function Dashboard() {
 
       {/* Leaderboard table */}
       <Card>
-        <div className="flex items-center gap-2 mb-5">
-          <Trophy size={18} className="text-ucl-gold" />
-          <h2 className="font-display text-2xl">{t("dashboard.classification")}</h2>
+        <div className="flex items-center justify-between gap-2 mb-5">
+          <div className="flex items-center gap-2">
+            <Trophy size={18} className="text-ucl-gold" />
+            <h2 className="font-display text-2xl">{t("dashboard.classification")}</h2>
+          </div>
+          <button
+            onClick={shareWhatsApp}
+            aria-label={t("dashboard.shareAria")}
+            className="flex items-center gap-1.5 text-xs font-medium text-ucl-silver hover:text-ucl-gold border border-ucl-blue/50 hover:border-ucl-gold/50 rounded-lg px-3 py-1.5 transition-colors shrink-0"
+          >
+            <Share2 size={14} /> {t("dashboard.share")}
+          </button>
         </div>
 
         <div className="space-y-2">

@@ -49,6 +49,8 @@
     "predictionsCount": "{{count}} pronósticos",
     "points": "PUNTOS",
     "classification": "Clasificación",
+    "share": "Compartir",
+    "shareAria": "Compartir la tabla general por WhatsApp",
     "you": "(tú)",
     "legendMatches": "Partidos",
     "legendTop8": "Top 8",
