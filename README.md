@@ -1,5 +1,7 @@
 # 🏆 UCL Quiniela App
 
+[![CI](https://github.com/Gerardo-Cabrera/ucl-quiniela/actions/workflows/ci.yml/badge.svg)](https://github.com/Gerardo-Cabrera/ucl-quiniela/actions/workflows/ci.yml)
+
 Aplicación de quiniela basada en la UEFA Champions League con sistema de puntuación por fases.
 
 ## Stack
