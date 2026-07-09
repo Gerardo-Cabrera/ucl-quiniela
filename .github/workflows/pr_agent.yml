@@ -1,0 +1,44 @@
+name: PR Agent
+
+# Revisión de código con IA usando PR-Agent (open-source, the-pr-agent/pr-agent)
+# con el free tier de Google Gemini. NO es de pago.
+#
+# Requisito único: añadir el secret GEMINI_API_KEY (key GRATIS en
+# https://aistudio.google.com/apikey). Si ese secret NO existe, el paso se OMITE
+# (no falla el PR): el repo sigue funcionando siempre, sin coste ni bloqueos.
+on:
+  pull_request:
+    types: [opened, reopened, ready_for_review]
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+jobs:
+  pr_agent:
+    # Evita bucles (no reacciona a sus propios comentarios de bot).
+    if: ${{ github.event.sender.type != 'Bot' }}
+    runs-on: ubuntu-latest
+    env:
+      # Se expone a nivel de job solo para poder omitir el paso si falta la key.
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+    steps:
+      - name: PR Agent (Gemini)
+        if: ${{ env.GEMINI_API_KEY != '' }}
+        uses: the-pr-agent/pr-agent@main
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GOOGLE_AI_STUDIO.GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          # Modelo del free tier de Gemini. Si Google cambia la disponibilidad,
+          # actualiza estos nombres (ver https://ai.google.dev/gemini-api/docs/models).
+          config.model: "gemini/gemini-2.0-flash"
+          config.fallback_models: '["gemini/gemini-2.0-flash-lite"]'
+          # Al abrir un PR: resumen (describe), revisión y sugerencias automáticas.
+          # También responde a comandos en comentarios: /review, /describe,
+          # /improve, /ask ...
+          github_action_config.auto_review: "true"
+          github_action_config.auto_describe: "true"
+          github_action_config.auto_improve: "true"
