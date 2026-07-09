@@ -32,12 +32,12 @@ export default function Dashboard() {
 
   // Comparte la tabla como texto: WhatsApp (u otra app) se abre con el mensaje
   // pre-cargado y el usuario elige el grupo. Reutiliza los datos ya mostrados.
+  // Sin emojis (astral/4 bytes): WhatsApp los corrompe en el texto de wa.me.
   const shareWhatsApp = () => {
-    const rows = leaderboard.map((e, i) => {
-      const label = i < 3 ? ["🥇", "🥈", "🥉"][i] : `${e.rank}.`;
-      return `${label} ${e.team_name} — ${e.total_points} ${t("common.pts")}`;
-    });
-    const text = `${t("brand.appTitle")} · ${t("dashboard.title")}\n\n${rows.join("\n")}`;
+    const rows = leaderboard.map(
+      (e) => `${e.rank}. ${e.team_name} — ${e.total_points} ${t("common.pts")}`,
+    );
+    const text = `${t("dashboard.shareTitle")}\n\n${rows.join("\n")}`;
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank", "noopener,noreferrer");
   };
 
