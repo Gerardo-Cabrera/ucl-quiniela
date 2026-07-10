@@ -6,6 +6,7 @@ import { ErrorBoundary } from "react-error-boundary";
 import { Toaster } from "react-hot-toast";
 import { useTranslation } from "react-i18next";
 import { useAuthStore } from "@/store/authStore";
+import { useInactivityLogout } from "@/hooks";
 import { Navbar } from "@/components/Navbar";
 import { ErrorFallback } from "@/components/ErrorFallback";
 import { TOASTER_STYLE } from "@/config";
@@ -30,6 +31,7 @@ const queryClient = new QueryClient({
 
 function ProtectedLayout() {
   const { isAuthenticated } = useAuthStore();
+  useInactivityLogout();  // cierra la sesión tras 1 h de inactividad
   if (!isAuthenticated) return <Navigate to="/login" replace />;
 
   return (
