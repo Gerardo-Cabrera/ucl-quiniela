@@ -3,7 +3,8 @@
     "loading": "Cargando...",
     "vs": "vs",
     "pts": "pts",
-    "dash": "—"
+    "dash": "—",
+    "close": "Cerrar"
   },
   "brand": {
     "name": "UCL",
@@ -20,6 +21,7 @@
     "aciertos": "Aciertos",
     "jornada": "Jornada",
     "mvps": "MVPs",
+    "changePassword": "Cambiar contraseña",
     "logout": "Salir"
   },
   "auth": {
@@ -42,7 +44,22 @@
     "errTeamShort": "El nombre de equipo debe tener al menos 3 caracteres.",
     "errAliasShort": "El alias debe tener al menos 3 caracteres.",
     "errEmailInvalid": "Introduce un correo electrónico válido.",
-    "errPasswordShort": "La contraseña debe tener al menos 6 caracteres."
+    "errPasswordShort": "La contraseña debe tener al menos 6 caracteres.",
+    "forgotPassword": "¿Olvidaste tu contraseña?",
+    "backToLogin": "Volver a entrar",
+    "resetHint": "Confirma tu email y el nombre de tu equipo, y define una nueva contraseña.",
+    "resetSubmit": "Restablecer contraseña",
+    "resetSuccess": "Contraseña restablecida. Ya puedes entrar.",
+    "changePassword": {
+      "title": "Cambiar contraseña",
+      "current": "Contraseña actual",
+      "new": "Nueva contraseña",
+      "confirm": "Confirmar contraseña",
+      "submit": "Guardar",
+      "success": "Contraseña actualizada.",
+      "mismatch": "Las contraseñas no coinciden.",
+      "sameAsCurrent": "La nueva contraseña debe ser distinta de la actual."
+    }
   },
   "dashboard": {
     "title": "Tabla General",
