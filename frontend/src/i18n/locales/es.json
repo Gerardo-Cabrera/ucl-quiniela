@@ -3,8 +3,7 @@
     "loading": "Cargando...",
     "vs": "vs",
     "pts": "pts",
-    "dash": "—",
-    "close": "Cerrar"
+    "dash": "—"
   },
   "brand": {
     "name": "UCL",
@@ -52,13 +51,14 @@
     "resetSuccess": "Contraseña restablecida. Ya puedes entrar.",
     "changePassword": {
       "title": "Cambiar contraseña",
+      "voluntaryHint": "Ingresa tu contraseña actual y la nueva.",
       "current": "Contraseña actual",
       "new": "Nueva contraseña",
-      "confirm": "Confirmar contraseña",
-      "submit": "Guardar",
-      "success": "Contraseña actualizada.",
+      "confirm": "Confirmar nueva contraseña",
+      "submit": "Guardar contraseña",
+      "cancel": "Cancelar",
       "mismatch": "Las contraseñas no coinciden.",
-      "sameAsCurrent": "La nueva contraseña debe ser distinta de la actual."
+      "success": "Contraseña actualizada."
     }
   },
   "dashboard": {

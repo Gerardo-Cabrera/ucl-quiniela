@@ -1,9 +1,7 @@
-import { useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { Trophy, CalendarDays, ListChecks, Star, Target, CalendarRange, Crown, LogOut, User, KeyRound } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useAuthStore } from "@/store/authStore";
-import { ChangePasswordModal } from "@/components/ChangePasswordModal";
 import { clsx } from "clsx";
 
 const NAV_ITEMS = [
@@ -20,7 +18,6 @@ export function Navbar() {
   const { t } = useTranslation();
   const { user, logout } = useAuthStore();
   const navigate = useNavigate();
-  const [showChangePw, setShowChangePw] = useState(false);
 
   const handleLogout = () => {
     logout();
@@ -67,7 +64,7 @@ export function Navbar() {
             </div>
             <span className="text-xs text-ucl-silver truncate">{user?.team_name}</span>
           </div>
-          <button onClick={() => setShowChangePw(true)} className="btn-secondary w-full flex items-center justify-center gap-2 text-sm py-2 mb-2">
+          <button onClick={() => navigate("/change-password")} className="btn-secondary w-full flex items-center justify-center gap-2 text-sm py-2 mb-2">
             <KeyRound size={14} /> {t("nav.changePassword")}
           </button>
           <button onClick={handleLogout} className="btn-secondary w-full flex items-center justify-center gap-2 text-sm py-2">
@@ -95,8 +92,6 @@ export function Navbar() {
           </NavLink>
         ))}
       </nav>
-
-      {showChangePw && <ChangePasswordModal onClose={() => setShowChangePw(false)} />}
     </>
   );
 }

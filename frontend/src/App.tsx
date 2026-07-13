@@ -19,6 +19,7 @@ import Top8Page         from "@/pages/Top8";
 import AciertosPage     from "@/pages/Aciertos";
 import JornadaPage      from "@/pages/Jornada";
 import MvpsPage         from "@/pages/Mvps";
+import ChangePasswordPage from "@/pages/ChangePassword";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -47,6 +48,7 @@ function ProtectedLayout() {
             <Route path="/aciertos"    element={<AciertosPage />} />
             <Route path="/jornada"     element={<JornadaPage />} />
             <Route path="/mvps"        element={<MvpsPage />} />
+            <Route path="/change-password" element={<ChangePasswordPage />} />
           </Routes>
         </div>
       </main>
