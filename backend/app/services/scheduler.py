@@ -44,6 +44,17 @@ async def _retry(coro_func, job_name: str) -> tuple[bool, object]:
         try:
             return True, await coro_func()
         except (HTTPStatusError, RequestError) as e:
+            status = getattr(getattr(e, "response", None), "status_code", None)
+            # 401/403 = problema de credenciales/config, no transitorio: reintentar
+            # es inútil y gasta cuota. Se corta con un mensaje accionable.
+            if status in (401, 403):
+                logger.error(
+                    "Job %s: API-Football rechazó la petición con %d. Revisa "
+                    "API_FOOTBALL_KEY y API_FOOTBALL_PROVIDER (key inválida/no "
+                    "suscrita, o provider/host que no corresponden a la key). No se reintenta.",
+                    job_name, status,
+                )
+                return False, None
             logger.warning(
                 "Job %s attempt %d/%d failed (network): %s",
                 job_name, attempt, max_retries, str(e),

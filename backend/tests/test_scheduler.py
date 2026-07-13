@@ -163,3 +163,24 @@ async def test_sync_first_goals_self_heals(monkeypatch):
     pred = await _get_prediction(pred_id)
     assert pred.is_calculated is True
     assert pred.points_earned == 11  # ahora con el punto de primer gol
+
+
+@pytest.mark.asyncio
+async def test_retry_stops_on_auth_error():
+    """Un 403/401 de la API es de configuración (no transitorio): no se reintenta."""
+    import httpx
+
+    calls = 0
+
+    async def failing():
+        nonlocal calls
+        calls += 1
+        req = httpx.Request("GET", "https://api-football-v1.p.rapidapi.com/v3/leagues?id=2")
+        raise httpx.HTTPStatusError(
+            "Client error '403 Forbidden'", request=req, response=httpx.Response(403, request=req)
+        )
+
+    ok, result = await scheduler_module._retry(failing, "sync_fixtures")
+    assert ok is False
+    assert result is None
+    assert calls == 1  # sin reintentos (con retry habrían sido JOB_MAX_RETRIES)
