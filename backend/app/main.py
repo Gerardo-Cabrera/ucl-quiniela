@@ -19,6 +19,8 @@ from app.routers import (
 )
 from app.services.scheduler import start_scheduler, stop_scheduler
 from app.services.ucl_api import close_client
+from app.core.migrations import run_migrations
+import asyncio
 import logging
 
 setup_logging()
@@ -28,6 +30,14 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("UCL Quiniela API iniciando...")
+    # Asegura el esquema (crea/actualiza tablas) antes de arrancar el scheduler:
+    # así los jobs no fallan con "relation ... does not exist" si el despliegue
+    # no ejecutó las migraciones (p. ej. Render). En un hilo: alembic corre async.
+    try:
+        await asyncio.to_thread(run_migrations)
+    except Exception:
+        logger.exception("Fallo aplicando migraciones al arrancar; se aborta el inicio.")
+        raise
     start_scheduler()
     yield
     stop_scheduler()
