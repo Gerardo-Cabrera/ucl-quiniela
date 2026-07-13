@@ -19,6 +19,7 @@ import Top8Page         from "@/pages/Top8";
 import AciertosPage     from "@/pages/Aciertos";
 import JornadaPage      from "@/pages/Jornada";
 import MvpsPage         from "@/pages/Mvps";
+import ChangePasswordPage from "@/pages/ChangePassword";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -37,7 +38,7 @@ function ProtectedLayout() {
   return (
     <div className="min-h-screen ucl-stars-bg">
       <Navbar />
-      <main className="lg:pl-56 pb-20 lg:pb-0">
+      <main className="lg:pl-56 pt-14 pb-20 lg:pt-0 lg:pb-0">
         <div className="max-w-5xl mx-auto px-4 py-6">
           <Routes>
             <Route path="/"            element={<Dashboard />} />
@@ -47,6 +48,7 @@ function ProtectedLayout() {
             <Route path="/aciertos"    element={<AciertosPage />} />
             <Route path="/jornada"     element={<JornadaPage />} />
             <Route path="/mvps"        element={<MvpsPage />} />
+            <Route path="/change-password" element={<ChangePasswordPage />} />
           </Routes>
         </div>
       </main>

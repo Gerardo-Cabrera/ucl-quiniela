@@ -2,69 +2,85 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useAuthStore } from "@/store/authStore";
+import { apiErrorMessage } from "@/lib/apiError";
 import { Spinner } from "@/components/ui";
 
-type Mode = "login" | "register";
+type Mode = "login" | "register" | "reset";
 
-// Extrae un mensaje legible del error de axios. `detail` es string en nuestras
-// HTTPException; en un 422 de Pydantic es una lista {msg, loc} (se toma el primero,
-// quitando el prefijo "Value error, " de los validadores propios).
-function apiErrorMessage(err: any, fallback: string): string {
-  const detail = err?.response?.data?.detail;
-  if (typeof detail === "string") return detail;
-  if (Array.isArray(detail) && detail.length) {
-    return (detail[0]?.msg ?? "").replace(/^Value error, /, "") || fallback;
-  }
-  return fallback;
-}
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function LoginPage() {
   const { t } = useTranslation();
   const [mode, setMode]           = useState<Mode>("login");
   const [identifier, setIdentifier] = useState("");   // login: email, alias o equipo
-  const [email, setEmail]         = useState("");     // registro
-  const [password, setPassword]   = useState("");
+  const [email, setEmail]         = useState("");     // registro / recuperación
+  const [password, setPassword]   = useState("");     // en "reset" es la nueva contraseña
   const [teamName, setTeamName]   = useState("");
   const [alias, setAlias]         = useState("");
   const [error, setError]         = useState("");
+  const [notice, setNotice]       = useState("");     // mensaje de éxito (verde)
   const [loading, setLoading]     = useState(false);
 
-  const { login, register } = useAuthStore();
+  const { login, register, resetPassword } = useAuthStore();
   const navigate = useNavigate();
 
-  // Validación de registro (feedback inmediato en español). El backend aplica las
-  // mismas reglas como garantía.
+  const switchMode = (m: Mode) => { setMode(m); setError(""); setNotice(""); };
+
+  // Validaciones cliente (feedback inmediato); el backend aplica las mismas reglas.
   const registerError = (): string | null => {
     if (teamName.trim().length < 3) return t("auth.errTeamShort");
     if (alias.trim() && alias.trim().length < 3) return t("auth.errAliasShort");
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return t("auth.errEmailInvalid");
+    if (!EMAIL_RE.test(email)) return t("auth.errEmailInvalid");
+    if (password.length < 6) return t("auth.errPasswordShort");
+    return null;
+  };
+  const resetErrorMsg = (): string | null => {
+    if (!EMAIL_RE.test(email)) return t("auth.errEmailInvalid");
+    if (teamName.trim().length < 3) return t("auth.errTeamShort");
     if (password.length < 6) return t("auth.errPasswordShort");
     return null;
   };
 
   const handleSubmit = async () => {
-    setError("");
-    if (mode === "register") {
-      const invalid = registerError();
-      if (invalid) { setError(invalid); return; }
-    }
+    setError(""); setNotice("");
+    if (mode === "register") { const invalid = registerError(); if (invalid) { setError(invalid); return; } }
+    if (mode === "reset")    { const invalid = resetErrorMsg(); if (invalid) { setError(invalid); return; } }
     setLoading(true);
     try {
       if (mode === "login") {
         await login(identifier, password);
-      } else {
+        navigate("/");
+      } else if (mode === "register") {
         await register(teamName, email, password, alias || undefined);
-        setMode("login");
-        setError("");
-        return;
+        setPassword(""); switchMode("login");
+      } else {
+        await resetPassword(email, teamName, password);
+        setPassword(""); setMode("login"); setError(""); setNotice(t("auth.resetSuccess"));
       }
-      navigate("/");
     } catch (err: any) {
       setError(apiErrorMessage(err, t("auth.genericError")));
     } finally {
       setLoading(false);
     }
   };
+
+  const field = (
+    label: string, value: string, onChange: (v: string) => void,
+    { type = "text", placeholder = "", aria = label }: { type?: string; placeholder?: string; aria?: string } = {},
+  ) => (
+    <div>
+      <label className="block text-xs text-ucl-silver/70 mb-1.5 font-mono uppercase">{label}</label>
+      <input
+        type={type}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
+        placeholder={placeholder}
+        className="input-base w-full"
+        aria-label={aria}
+      />
+    </div>
+  );
 
   return (
     <div className="min-h-screen ucl-stars-bg flex items-center justify-center p-4">
@@ -102,7 +118,7 @@ export default function LoginPage() {
             {(["login", "register"] as Mode[]).map((m) => (
               <button
                 key={m}
-                onClick={() => { setMode(m); setError(""); }}
+                onClick={() => switchMode(m)}
                 className={`flex-1 py-2 text-sm rounded-md transition-all duration-200 ${
                   mode === m
                     ? "bg-ucl-gold text-ucl-navy font-bold"
@@ -114,79 +130,42 @@ export default function LoginPage() {
             ))}
           </div>
 
+          {mode === "reset" && (
+            <p className="text-xs text-ucl-silver/60 mb-4 -mt-2">{t("auth.resetHint")}</p>
+          )}
+
           <div className="space-y-4">
-            {mode === "login" ? (
-              <div>
-                <label className="block text-xs text-ucl-silver/70 mb-1.5 font-mono uppercase">{t("auth.identifier")}</label>
-                <input
-                  type="text"
-                  value={identifier}
-                  onChange={(e) => setIdentifier(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
-                  placeholder={t("auth.identifierPlaceholder")}
-                  className="input-base w-full"
-                  aria-label={t("auth.identifier")}
-                />
-              </div>
-            ) : (
+            {mode === "login" &&
+              field(t("auth.identifier"), identifier, setIdentifier, { placeholder: t("auth.identifierPlaceholder") })}
+
+            {mode === "register" && (
               <>
-                <div>
-                  <label className="block text-xs text-ucl-silver/70 mb-1.5 font-mono uppercase">{t("auth.yourTeam")}</label>
-                  <input
-                    type="text"
-                    value={teamName}
-                    onChange={(e) => setTeamName(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
-                    placeholder={t("auth.teamPlaceholder")}
-                    className="input-base w-full"
-                    aria-label={t("auth.yourTeam")}
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs text-ucl-silver/70 mb-1.5 font-mono uppercase">{t("auth.alias")}</label>
-                  <input
-                    type="text"
-                    value={alias}
-                    onChange={(e) => setAlias(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
-                    placeholder={t("auth.aliasPlaceholder")}
-                    className="input-base w-full"
-                    aria-label={t("auth.alias")}
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs text-ucl-silver/70 mb-1.5 font-mono uppercase">{t("auth.email")}</label>
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
-                    placeholder={t("auth.emailPlaceholder")}
-                    className="input-base w-full"
-                    aria-label={t("auth.emailAria")}
-                  />
-                </div>
+                {field(t("auth.yourTeam"), teamName, setTeamName, { placeholder: t("auth.teamPlaceholder") })}
+                {field(t("auth.alias"), alias, setAlias, { placeholder: t("auth.aliasPlaceholder") })}
+                {field(t("auth.email"), email, setEmail, { type: "email", placeholder: t("auth.emailPlaceholder"), aria: t("auth.emailAria") })}
               </>
             )}
 
-            <div>
-              <label className="block text-xs text-ucl-silver/70 mb-1.5 font-mono uppercase">{t("auth.password")}</label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
-                placeholder="••••••••"
-                className="input-base w-full"
-                aria-label={t("auth.password")}
-              />
-            </div>
+            {mode === "reset" && (
+              <>
+                {field(t("auth.email"), email, setEmail, { type: "email", placeholder: t("auth.emailPlaceholder"), aria: t("auth.emailAria") })}
+                {field(t("auth.yourTeam"), teamName, setTeamName, { placeholder: t("auth.teamPlaceholder") })}
+              </>
+            )}
+
+            {field(
+              mode === "reset" ? t("auth.changePassword.new") : t("auth.password"),
+              password, setPassword, { type: "password", placeholder: "••••••••", aria: t("auth.password") },
+            )}
 
             {error && (
               <div role="alert" className="bg-red-900/20 border border-red-500/30 rounded-lg px-4 py-2.5 text-red-400 text-sm">
                 {error}
+              </div>
+            )}
+            {notice && !error && (
+              <div role="status" className="bg-green-900/20 border border-green-500/30 rounded-lg px-4 py-2.5 text-green-400 text-sm">
+                {notice}
               </div>
             )}
 
@@ -196,8 +175,22 @@ export default function LoginPage() {
               className="btn-primary w-full flex items-center justify-center gap-2 mt-2"
             >
               {loading ? <><Spinner size="sm" /> {t("common.loading")}</> :
-               mode === "login" ? t("auth.submitLogin") : t("auth.submitRegister")}
+               mode === "login" ? t("auth.submitLogin") :
+               mode === "register" ? t("auth.submitRegister") : t("auth.resetSubmit")}
             </button>
+
+            {mode === "login" && (
+              <button type="button" onClick={() => switchMode("reset")}
+                className="w-full text-center text-xs text-ucl-silver/60 hover:text-ucl-gold transition-colors">
+                {t("auth.forgotPassword")}
+              </button>
+            )}
+            {mode === "reset" && (
+              <button type="button" onClick={() => switchMode("login")}
+                className="w-full text-center text-xs text-ucl-silver/60 hover:text-ucl-gold transition-colors">
+                {t("auth.backToLogin")}
+              </button>
+            )}
           </div>
         </div>
 

@@ -35,10 +35,10 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    # Las migraciones las aplica la app al arrancar (app/core/migrations.py).
     # --proxy-headers: nginx reenvía la IP real del cliente (rate limiting).
     command: >
-      sh -c "alembic upgrade head &&
-             uvicorn app.main:app --host 0.0.0.0 --port 8000
+      sh -c "uvicorn app.main:app --host 0.0.0.0 --port 8000
              --proxy-headers --forwarded-allow-ips='*'"
 
   frontend:

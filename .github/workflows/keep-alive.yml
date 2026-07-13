@@ -1,0 +1,36 @@
+name: Keep Render awake
+
+# El plan FREE de Render duerme la instancia tras ~15 min sin tráfico, y con ella
+# se detiene el scheduler in-process (se cortan las sincronizaciones). Este cron la
+# mantiene despierta con un GET /health. El ping DEBE venir de fuera: una instancia
+# dormida no se despierta sola. Repo público → los minutos de Actions son gratis.
+#
+# Activación: define la variable de repo KEEPALIVE_URL
+#   (Settings → Secrets and variables → Actions → Variables → New variable)
+#   con la URL del health del backend, p. ej. https://tu-api.onrender.com/health
+# Si no está definida, el job se OMITE (no molesta a quien no use Render).
+on:
+  schedule:
+    - cron: "*/14 * * * *"   # cada 14 min (por debajo del timeout de 15 min de Render)
+  workflow_dispatch:          # permite dispararlo a mano
+
+permissions:
+  contents: read
+
+concurrency:
+  group: keep-alive
+  cancel-in-progress: true
+
+jobs:
+  ping:
+    if: ${{ vars.KEEPALIVE_URL != '' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping /health
+        env:
+          URL: ${{ vars.KEEPALIVE_URL }}
+        run: |
+          # Best-effort: enviar tráfico basta para mantenerla despierta; el timeout
+          # holgado + reintentos cubren el arranque en frío. No falla el job.
+          code=$(curl -sS -o /dev/null -w "%{http_code}" --max-time 60 --retry 2 --retry-delay 5 "$URL" || echo "000")
+          echo "GET $URL -> $code"

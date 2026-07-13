@@ -174,6 +174,87 @@ async def test_register_invalid_email(client: AsyncClient):
     assert resp.status_code == 422
 
 
+# ── CAMBIO / RECUPERACIÓN DE CONTRASEÑA ──────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_change_password_success(auth_client: AsyncClient):
+    """El usuario autenticado cambia su contraseña; la nueva vale y la vieja no."""
+    resp = await auth_client.post("/api/auth/change-password", json={
+        "current_password": "testpass123", "new_password": "nuevapass456"})
+    assert resp.status_code == 200
+    assert (await auth_client.post("/api/auth/login", json={
+        "identifier": "test@test.com", "password": "nuevapass456"})).status_code == 200
+    assert (await auth_client.post("/api/auth/login", json={
+        "identifier": "test@test.com", "password": "testpass123"})).status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_change_password_wrong_current(auth_client: AsyncClient):
+    resp = await auth_client.post("/api/auth/change-password", json={
+        "current_password": "incorrecta", "new_password": "nuevapass456"})
+    assert resp.status_code == 400
+    assert "actual" in resp.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_change_password_same_as_current(auth_client: AsyncClient):
+    resp = await auth_client.post("/api/auth/change-password", json={
+        "current_password": "testpass123", "new_password": "testpass123"})
+    assert resp.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_change_password_requires_auth(client: AsyncClient):
+    resp = await client.post("/api/auth/change-password", json={
+        "current_password": "x", "new_password": "nuevapass456"})
+    assert resp.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_change_password_short_new(auth_client: AsyncClient):
+    resp = await auth_client.post("/api/auth/change-password", json={
+        "current_password": "testpass123", "new_password": "123"})
+    assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_reset_password_success(client: AsyncClient):
+    """Recuperación sin email: email + nombre de equipo correctos → nueva contraseña."""
+    await client.post("/api/auth/register", json={
+        "team_name": "Reset FC", "email": "reset@test.com", "password": "origpass1"})
+    resp = await client.post("/api/auth/reset-password", json={
+        "email": "reset@test.com", "team_name": "Reset FC", "new_password": "flamante99"})
+    assert resp.status_code == 204
+    assert (await client.post("/api/auth/login", json={
+        "identifier": "reset@test.com", "password": "flamante99"})).status_code == 200
+    assert (await client.post("/api/auth/login", json={
+        "identifier": "reset@test.com", "password": "origpass1"})).status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_reset_password_wrong_data(client: AsyncClient):
+    """Si el email y el equipo no son del mismo usuario, no se restablece."""
+    await client.post("/api/auth/register", json={
+        "team_name": "Real FC", "email": "real@test.com", "password": "origpass1"})
+    resp = await client.post("/api/auth/reset-password", json={
+        "email": "real@test.com", "team_name": "Equipo Falso", "new_password": "flamante99"})
+    assert resp.status_code == 400
+    assert "no coinciden" in resp.json()["detail"]
+    # La contraseña original sigue siendo válida.
+    assert (await client.post("/api/auth/login", json={
+        "identifier": "real@test.com", "password": "origpass1"})).status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_reset_password_short_new(client: AsyncClient):
+    await client.post("/api/auth/register", json={
+        "team_name": "Short FC", "email": "short@test.com", "password": "origpass1"})
+    resp = await client.post("/api/auth/reset-password", json={
+        "email": "short@test.com", "team_name": "Short FC", "new_password": "123"})
+    assert resp.status_code == 422
+
+
 @pytest.mark.asyncio
 async def test_config_teams_from_db(client: AsyncClient):
     """El selector del Top 8 lee los clubes de la BD (sincronizados desde la API)."""

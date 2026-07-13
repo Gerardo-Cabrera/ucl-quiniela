@@ -1,8 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
-from app.schemas import UserCreate, UserLogin, UserOut, Token
+from app.models.user import User
+from app.schemas import UserCreate, UserLogin, UserOut, Token, PasswordChange, PasswordReset
 from app.core.security import hash_password, verify_password, create_access_token
+from app.core.deps import get_current_user
 from app.core.rate_limit import limiter
 from app.config import settings
 from app.crud import user_crud
@@ -47,3 +49,35 @@ async def login(request: Request, data: UserLogin, db: AsyncSession = Depends(ge
 
     token = create_access_token({"sub": str(user.id)})
     return Token(access_token=token, user=UserOut.model_validate(user))
+
+
+@router.post("/change-password", response_model=UserOut)
+@limiter.limit(settings.RATE_LIMIT_AUTH)
+async def change_password(
+    request: Request,
+    data: PasswordChange,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Cambia la contraseña del usuario autenticado (verifica la actual)."""
+    if not verify_password(data.current_password, current_user.hashed_password):
+        raise HTTPException(status_code=400, detail="La contraseña actual es incorrecta.")
+    if data.new_password == data.current_password:
+        raise HTTPException(status_code=400, detail="La nueva contraseña debe ser distinta de la actual.")
+    await user_crud.update_password(db, current_user, hashed_password=hash_password(data.new_password))
+    return current_user
+
+
+@router.post("/reset-password", status_code=204)
+@limiter.limit(settings.RATE_LIMIT_AUTH)
+async def reset_password(
+    request: Request,
+    data: PasswordReset,
+    db: AsyncSession = Depends(get_db),
+):
+    """Recuperación sin email: prueba la identidad con email + nombre de equipo
+    (ambos únicos) y define la nueva contraseña. Limitada por tasa (anti fuerza bruta)."""
+    user = await user_crud.get_by_email_and_team(db, data.email, data.team_name)
+    if not user:
+        raise HTTPException(status_code=400, detail="Los datos no coinciden con ninguna cuenta.")
+    await user_crud.update_password(db, user, hashed_password=hash_password(data.new_password))
