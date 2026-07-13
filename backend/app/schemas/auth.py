@@ -3,6 +3,13 @@ from typing import Optional
 from datetime import datetime
 
 
+def _check_password(v: str) -> str:
+    """Regla única de contraseña (registro, cambio y recuperación)."""
+    if len(v) < 6:
+        raise ValueError("La contraseña debe tener al menos 6 caracteres.")
+    return v
+
+
 class UserCreate(BaseModel):
     # El nombre de equipo es texto libre (mín. 3 caracteres tras recortar espacios).
     team_name: str = Field(max_length=100)
@@ -35,9 +42,31 @@ class UserCreate(BaseModel):
     @classmethod
     def _validate_password(cls, v: str) -> str:
         # max 72: bcrypt trunca silenciosamente los bytes restantes.
-        if len(v) < 6:
-            raise ValueError("La contraseña debe tener al menos 6 caracteres.")
-        return v
+        return _check_password(v)
+
+
+class PasswordChange(BaseModel):
+    """Cambio de contraseña del usuario autenticado."""
+    current_password: str = Field(min_length=1)
+    new_password: str = Field(max_length=72)
+
+    @field_validator("new_password")
+    @classmethod
+    def _validate_new_password(cls, v: str) -> str:
+        return _check_password(v)
+
+
+class PasswordReset(BaseModel):
+    """Recuperación sin email: se prueba la identidad con datos de la cuenta
+    (email + nombre de equipo, ambos únicos) y se define una nueva contraseña."""
+    email: EmailStr
+    team_name: str = Field(min_length=1, max_length=100)
+    new_password: str = Field(max_length=72)
+
+    @field_validator("new_password")
+    @classmethod
+    def _validate_new_password(cls, v: str) -> str:
+        return _check_password(v)
 
 
 class UserLogin(BaseModel):
