@@ -52,7 +52,7 @@ export default function LoginPage() {
         navigate("/");
       } else if (mode === "register") {
         await register(teamName, email, password, alias || undefined);
-        setPassword(""); switchMode("login");
+        setPassword(""); setMode("login"); setError(""); setNotice(t("auth.registerSuccess"));
       } else {
         await resetPassword(email, teamName, password);
         setPassword(""); setMode("login"); setError(""); setNotice(t("auth.resetSuccess"));

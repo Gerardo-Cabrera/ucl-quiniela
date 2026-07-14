@@ -27,8 +27,10 @@
     "title": "Perfil",
     "aliasSection": "Alias",
     "hint": "Tu alias es opcional; también sirve para iniciar sesión.",
-    "saveAlias": "Guardar alias",
-    "aliasSaved": "Alias actualizado.",
+    "save": "Guardar",
+    "saved": "Cambios guardados.",
+    "noChanges": "No hay cambios que guardar.",
+    "passwordIncomplete": "Para cambiar la contraseña, completa los tres campos.",
     "back": "Volver"
   },
   "auth": {
@@ -57,14 +59,13 @@
     "resetHint": "Confirma tu email y el nombre de tu equipo, y define una nueva contraseña.",
     "resetSubmit": "Restablecer contraseña",
     "resetSuccess": "Contraseña restablecida. Ya puedes entrar.",
+    "registerSuccess": "¡Cuenta creada con éxito! Ya puedes iniciar sesión.",
     "changePassword": {
       "title": "Cambiar contraseña",
       "current": "Contraseña actual",
       "new": "Nueva contraseña",
       "confirm": "Confirmar nueva contraseña",
-      "submit": "Guardar contraseña",
-      "mismatch": "Las contraseñas no coinciden.",
-      "success": "Contraseña actualizada."
+      "mismatch": "Las contraseñas no coinciden."
     }
   },
   "dashboard": {
