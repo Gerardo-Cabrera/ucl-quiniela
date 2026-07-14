@@ -20,8 +20,15 @@
     "aciertos": "Aciertos",
     "jornada": "Jornada",
     "mvps": "MVPs",
+    "profile": "Perfil",
     "changePassword": "Cambiar contraseña",
     "logout": "Salir"
+  },
+  "profile": {
+    "title": "Perfil",
+    "hint": "Tu alias es opcional; también sirve para iniciar sesión.",
+    "save": "Guardar",
+    "saved": "Perfil actualizado."
   },
   "auth": {
     "tabLogin": "Entrar",
