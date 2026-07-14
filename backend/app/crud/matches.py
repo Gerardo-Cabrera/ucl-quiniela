@@ -1,4 +1,4 @@
-from datetime import date, datetime, tzinfo
+from datetime import date, datetime, timezone, tzinfo
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.models.match import Match, MatchPhase, MatchStatus
@@ -38,6 +38,21 @@ class MatchCRUD:
             if day not in firsts or md < firsts[day]:
                 firsts[day] = md
         return firsts
+
+    async def started_day_match_ids(self, db: AsyncSession, tz: tzinfo) -> set[int]:
+        """IDs de los partidos de toda jornada ya INICIADA (su primer partido, en
+        `tz`, ya arrancó). Revela el día completo aunque algún partido no haya
+        empezado: los pronósticos del día ya cerraron, así que no cambian. Sirve
+        para mostrar los pronósticos ajenos sin permitir ver los de días por venir.
+        Una sola consulta ligera (id + fecha) y agrupación en Python, como
+        `day_first_kickoffs`."""
+        now = datetime.now(timezone.utc)
+        rows = [
+            (mid, tz_day(md, tz), as_utc(md) <= now)
+            for mid, md in (await db.execute(select(Match.id, Match.match_date))).all()
+        ]
+        started_days = {day for _, day, has_started in rows if has_started}
+        return {mid for mid, day, _ in rows if day in started_days}
 
 
 match_crud = MatchCRUD()

@@ -5,13 +5,19 @@ from app.models.prediction import Prediction
 
 
 class PredictionCRUD:
-    async def get_by_user(self, db: AsyncSession, user_id: int) -> list[Prediction]:
-        result = await db.execute(
+    async def get_by_user(
+        self, db: AsyncSession, user_id: int, only_match_ids: set[int] | None = None
+    ) -> list[Prediction]:
+        query = (
             select(Prediction)
             .where(Prediction.user_id == user_id)
             .options(selectinload(Prediction.match))
             .order_by(Prediction.created_at.desc())
         )
+        # None = todas (mis pronósticos); un set = solo esos (revelar los de otro).
+        if only_match_ids is not None:
+            query = query.where(Prediction.match_id.in_(only_match_ids))
+        result = await db.execute(query)
         return list(result.scalars().all())
 
     async def get_by_user_and_match(

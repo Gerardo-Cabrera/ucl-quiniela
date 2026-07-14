@@ -1,7 +1,9 @@
+import { useState } from "react";
 import { Trophy, Target, Star, Share2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useLeaderboard } from "@/hooks";
 import { Card, Spinner, EmptyState } from "@/components/ui";
+import { UserPredictionsModal } from "@/components/UserPredictionsModal";
 import { useAuthStore } from "@/store/authStore";
 import { clsx } from "clsx";
 
@@ -15,6 +17,7 @@ export default function Dashboard() {
   const { t } = useTranslation();
   const { data: leaderboard, isLoading } = useLeaderboard();
   const { user } = useAuthStore();
+  const [selected, setSelected] = useState<{ userId: number; teamName: string } | null>(null);
 
   if (isLoading) {
     return (
@@ -89,12 +92,14 @@ export default function Dashboard() {
           {leaderboard.map((entry, i) => {
             const isMe = entry.team_name === user?.team_name;
             return (
-              <div
+              <button
                 key={entry.team_name}
+                onClick={() => setSelected({ userId: entry.user_id, teamName: entry.team_name })}
+                title={t("dashboard.viewPredictions")}
                 className={clsx(
-                  "flex items-center gap-4 px-4 py-3 rounded-lg transition-colors",
+                  "w-full flex items-center gap-4 px-4 py-3 rounded-lg transition-colors text-left",
                   isMe
-                    ? "bg-ucl-gold/10 border border-ucl-gold/20"
+                    ? "bg-ucl-gold/10 border border-ucl-gold/20 hover:bg-ucl-gold/20"
                     : "hover:bg-ucl-blue/20"
                 )}
               >
@@ -128,7 +133,7 @@ export default function Dashboard() {
                 )}>
                   {entry.total_points}
                 </span>
-              </div>
+              </button>
             );
           })}
         </div>
@@ -139,6 +144,14 @@ export default function Dashboard() {
           <span><Star size={11} className="inline mr-1" />{t("dashboard.legendTop8")}</span>
         </div>
       </Card>
+
+      {selected && (
+        <UserPredictionsModal
+          userId={selected.userId}
+          teamName={selected.teamName}
+          onClose={() => setSelected(null)}
+        />
+      )}
     </div>
   );
 }

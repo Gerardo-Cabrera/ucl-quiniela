@@ -25,6 +25,10 @@ export const predictionsApi = {
     const { data } = await apiClient.get("/api/predictions");
     return data;
   },
+  getForUser: async (userId: number): Promise<Prediction[]> => {
+    const { data } = await apiClient.get(`/api/predictions/user/${userId}`);
+    return data;
+  },
   save: async (payload: {
     match_id: number;
     predicted_home: number;

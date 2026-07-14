@@ -3,7 +3,8 @@
     "loading": "Cargando...",
     "vs": "vs",
     "pts": "pts",
-    "dash": "—"
+    "dash": "—",
+    "close": "Cerrar"
   },
   "brand": {
     "name": "UCL",
@@ -80,6 +81,7 @@
     "you": "(tú)",
     "legendMatches": "Partidos",
     "legendTop8": "Top 8",
+    "viewPredictions": "Ver pronósticos",
     "emptyTitle": "Sin datos aún",
     "emptyDescription": "Los puntos aparecerán cuando haya partidos finalizados."
   },
@@ -121,6 +123,11 @@
     "emptyDescription": "Ve a la sección de Partidos para registrar tus pronósticos.",
     "real": "Real: {{home}} - {{away}}",
     "delete": "Eliminar pronóstico"
+  },
+  "userPredictions": {
+    "subtitle": "Pronósticos revelados de las jornadas ya iniciadas",
+    "emptyTitle": "Aún no hay pronósticos visibles",
+    "emptyDescription": "Los pronósticos de este participante se revelan cuando arranca el primer partido de cada jornada."
   },
   "predictionModal": {
     "titleEdit": "Editar Pronóstico",
