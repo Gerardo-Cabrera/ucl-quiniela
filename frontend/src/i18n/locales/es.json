@@ -21,14 +21,15 @@
     "jornada": "Jornada",
     "mvps": "MVPs",
     "profile": "Perfil",
-    "changePassword": "Cambiar contraseña",
     "logout": "Salir"
   },
   "profile": {
     "title": "Perfil",
+    "aliasSection": "Alias",
     "hint": "Tu alias es opcional; también sirve para iniciar sesión.",
-    "save": "Guardar",
-    "saved": "Perfil actualizado."
+    "saveAlias": "Guardar alias",
+    "aliasSaved": "Alias actualizado.",
+    "back": "Volver"
   },
   "auth": {
     "tabLogin": "Entrar",
@@ -58,12 +59,10 @@
     "resetSuccess": "Contraseña restablecida. Ya puedes entrar.",
     "changePassword": {
       "title": "Cambiar contraseña",
-      "voluntaryHint": "Ingresa tu contraseña actual y la nueva.",
       "current": "Contraseña actual",
       "new": "Nueva contraseña",
       "confirm": "Confirmar nueva contraseña",
       "submit": "Guardar contraseña",
-      "cancel": "Cancelar",
       "mismatch": "Las contraseñas no coinciden.",
       "success": "Contraseña actualizada."
     }
