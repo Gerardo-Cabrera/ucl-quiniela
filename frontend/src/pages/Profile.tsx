@@ -93,7 +93,6 @@ export default function ProfilePage() {
         {/* Contraseña (dejar en blanco si no se cambia) */}
         <div className="pt-2 border-t border-ucl-blue/30">
           <h2 className="font-display text-lg mb-1">{t("auth.changePassword.title")}</h2>
-          <p className="text-xs text-ucl-silver/50 mb-3">{t("profile.passwordHint")}</p>
           <div className="space-y-4">
             {pwField(t("auth.changePassword.current"), current, setCurrent)}
             {pwField(t("auth.changePassword.new"), next, setNext)}
