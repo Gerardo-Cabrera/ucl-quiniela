@@ -16,15 +16,12 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 10080  # 7 días
 
     # API-Football: hay dos formas de acceder a la MISMA API con distinta
-    # autenticación. El proveedor cambia host y cabecera:
-    #   - "rapidapi":  vía RapidAPI (host *.p.rapidapi.com, cabeceras
-    #     'X-RapidAPI-Key'/'X-RapidAPI-Host'); keys de ~50 caracteres.
-    #   - "apisports": acceso directo (https://v3.football.api-sports.io,
-    #     cabecera 'x-apisports-key'); keys de 32 caracteres.
-    # "auto" deduce el proveedor por el host. Usar host/cabecera equivocados → 403.
+    # autenticación (RapidAPI o api-sports directo). Lo ÚNICO que hay que
+    # configurar es la key (obligatoria en producción); el proveedor se deduce
+    # solo de la key: las de api-sports tienen 32 caracteres y las de RapidAPI son
+    # más largas (~50). API_FOOTBALL_PROVIDER queda como override opcional.
     API_FOOTBALL_KEY: str = ""
-    API_FOOTBALL_PROVIDER: str = "auto"  # auto | apisports | rapidapi
-    API_FOOTBALL_HOST: str = "api-football-v1.p.rapidapi.com"
+    API_FOOTBALL_PROVIDER: str = "auto"  # opcional: auto (por defecto) | apisports | rapidapi
     API_FOOTBALL_TIMEOUT: float = 30.0
     UCL_LEAGUE_ID: int = 2
     # Temporada de la competición (año de inicio: 2026 = 2026/27). Si se deja en 0,
@@ -102,12 +99,13 @@ class Settings(BaseSettings):
 
     @property
     def football_provider(self) -> str:
-        """Proveedor efectivo. 'auto' se resuelve por el host (RapidAPI usa
-        dominios *.rapidapi.com); cualquier otro host se trata como api-sports."""
+        """Proveedor efectivo. Si no se fuerza (valor por defecto 'auto'), se
+        deduce de la KEY: las de api-sports tienen 32 caracteres y las de RapidAPI
+        son más largas. Así basta con configurar API_FOOTBALL_KEY."""
         provider = self.API_FOOTBALL_PROVIDER.strip().lower()
         if provider in ("apisports", "rapidapi"):
             return provider
-        return "rapidapi" if "rapidapi" in self.API_FOOTBALL_HOST.lower() else "apisports"
+        return "apisports" if len(self.API_FOOTBALL_KEY.strip()) == 32 else "rapidapi"
 
     @property
     def football_base_url(self) -> str:
@@ -140,11 +138,16 @@ class Settings(BaseSettings):
         return v
 
     @model_validator(mode="after")
-    def _check_production_secret(self) -> "Settings":
-        if self.APP_ENV == "production" and self.SECRET_KEY == INSECURE_SECRET_KEY:
-            raise ValueError(
-                "SECRET_KEY inseguro: define un SECRET_KEY propio en producción (.env)."
-            )
+    def _check_production_config(self) -> "Settings":
+        if self.APP_ENV == "production":
+            if self.SECRET_KEY == INSECURE_SECRET_KEY:
+                raise ValueError(
+                    "SECRET_KEY inseguro: define un SECRET_KEY propio en producción (.env)."
+                )
+            if not self.API_FOOTBALL_KEY.strip():
+                raise ValueError(
+                    "API_FOOTBALL_KEY es obligatoria en producción (sin ella no hay datos de la UCL)."
+                )
         return self
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
