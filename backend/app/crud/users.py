@@ -4,6 +4,11 @@ from app.models.user import User
 
 
 class UserCRUD:
+    async def get_by_alias(self, db: AsyncSession, alias: str) -> User | None:
+        """Usuario dueño de un alias (para validar unicidad al editar el perfil)."""
+        result = await db.execute(select(User).where(User.alias == alias))
+        return result.scalar_one_or_none()
+
     async def get_by_identifier(self, db: AsyncSession, identifier: str) -> User | None:
         """Busca un usuario por email, alias o nombre de equipo (para el login)."""
         result = await db.execute(

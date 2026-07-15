@@ -1,10 +1,11 @@
 """Ventana de envío de pronósticos: plazo por jornada + interruptor de prórroga.
 
 - Unit: la regla pura (`_limit`/`_predictable`) con fechas explícitas.
-- CRUD: `day_first_kickoffs` (primer partido de cada día en la zona del torneo).
-- Integración: el flag `predictable` de /matches, el interruptor admin /predictions/override
-  y los rechazos del POST. Se usan partidos en días distintos para no depender de la
-  medianoche local (grouping determinista).
+- CRUD: `day_first_kickoffs` (primer partido de cada día en la zona del torneo) y
+  `started_day_match_ids` (partidos de jornadas ya iniciadas, para revelar ajenos).
+- Integración: el flag `predictable` de /matches, el interruptor admin /predictions/override,
+  los rechazos del POST y la revelación de pronósticos ajenos por jornada iniciada. Se usan
+  partidos en días distintos para no depender de la medianoche local (grouping determinista).
 """
 from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
@@ -13,7 +14,10 @@ import pytest
 from httpx import AsyncClient
 
 from app.config import settings
+from app.core.time import tz_day
 from app.models.match import Match, MatchPhase, MatchStatus
+from app.models.prediction import Prediction
+from app.models.user import User
 from app.services.prediction_window import _limit, _predictable
 from app.crud import match_crud
 from tests.conftest import TestSessionLocal
@@ -76,6 +80,28 @@ async def test_day_first_kickoffs_earliest_per_day():
 
     assert firsts[date(2027, 2, 16)] == datetime(2027, 2, 16, 18, 0, tzinfo=timezone.utc)
     assert firsts[date(2027, 2, 17)] == datetime(2027, 2, 17, 20, 0, tzinfo=timezone.utc)
+
+
+# ── CRUD: partidos de jornadas ya iniciadas ──────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_started_day_match_ids_reveals_whole_started_day():
+    now = datetime.now(timezone.utc)
+    # Día ya iniciado (su primer partido arrancó hace 10 min).
+    started = await _create_match(api_fixture_id=1, match_date=now - timedelta(minutes=10))
+    # Mismo día pero más tarde (aún no empezó): la jornada ya arrancó → se revela.
+    later = await _create_match(api_fixture_id=2, match_date=now + timedelta(hours=2))
+    # Otro día futuro: su jornada no ha empezado → NO se revela.
+    future = await _create_match(api_fixture_id=3, match_date=now + timedelta(days=3))
+
+    async with TestSessionLocal() as session:
+        ids = await match_crud.started_day_match_ids(session, _MADRID)
+
+    assert started in ids
+    assert future not in ids
+    # `later` se revela solo si cae en el mismo día (Madrid) que el ya iniciado.
+    same_day = tz_day(now - timedelta(minutes=10), _MADRID) == tz_day(now + timedelta(hours=2), _MADRID)
+    assert (later in ids) == same_day
 
 
 # ── Integración: flag predictable en /matches ────────────────────────────────
@@ -148,3 +174,36 @@ async def test_override_does_not_reopen_started_match(admin_client: AsyncClient)
     })
     assert resp.status_code == 400
     assert "comenzó" in resp.json()["detail"]
+
+
+# ── Integración: revelar pronósticos ajenos por jornada iniciada ─────────────
+
+@pytest.mark.asyncio
+async def test_user_predictions_reveal_only_started_days(auth_client: AsyncClient):
+    now = datetime.now(timezone.utc)
+    started = await _create_match(api_fixture_id=1, match_date=now - timedelta(minutes=10))
+    future = await _create_match(api_fixture_id=2, match_date=now + timedelta(days=3))
+
+    # Otro participante con un pronóstico en cada partido, insertados directo: el
+    # POST no dejaría pronosticar el partido ya iniciado.
+    async with TestSessionLocal() as session:
+        other = User(team_name="Rival FC", email="rival@test.com", hashed_password="x")
+        session.add(other)
+        await session.flush()
+        session.add_all([
+            Prediction(user_id=other.id, match_id=started, predicted_home=1, predicted_away=0),
+            Prediction(user_id=other.id, match_id=future, predicted_home=2, predicted_away=2),
+        ])
+        await session.commit()
+        other_id = other.id
+
+    resp = await auth_client.get(f"/api/predictions/user/{other_id}")
+    assert resp.status_code == 200
+    match_ids = {p["match_id"] for p in resp.json()}
+    assert started in match_ids      # jornada ya iniciada → visible
+    assert future not in match_ids   # jornada por venir → oculta
+
+
+@pytest.mark.asyncio
+async def test_user_predictions_requires_auth(client: AsyncClient):
+    assert (await client.get("/api/predictions/user/1")).status_code == 401

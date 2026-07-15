@@ -12,6 +12,7 @@ interface AuthState {
   register: (teamName: string, email: string, password: string, alias?: string) => Promise<void>;
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
   resetPassword: (email: string, teamName: string, newPassword: string) => Promise<void>;
+  updateAlias: (alias: string | null) => Promise<void>;
   logout: () => void;
 }
 
@@ -42,6 +43,11 @@ export const useAuthStore = create<AuthState>()(
         await apiClient.post("/api/auth/reset-password", {
           email, team_name: teamName, new_password: newPassword,
         });
+      },
+
+      updateAlias: async (alias) => {
+        const { data } = await apiClient.patch("/api/auth/me", { alias });
+        set({ user: data });  // UserOut actualizado (alias ya normalizado)
       },
 
       logout: () => {

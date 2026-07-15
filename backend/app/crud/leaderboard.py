@@ -65,6 +65,7 @@ class LeaderboardCRUD:
             entries.append(
                 LeaderboardEntry(
                     rank=rank,
+                    user_id=row.id,
                     team_name=row.team_name,
                     total_points=row.total_points,
                     match_points=row.match_points,

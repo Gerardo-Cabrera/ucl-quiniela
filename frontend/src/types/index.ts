@@ -75,6 +75,7 @@ export interface Top8Pick {
 
 export interface LeaderboardEntry {
   rank: number;
+  user_id: number;
   team_name: string;
   total_points: number;
   match_points: number;

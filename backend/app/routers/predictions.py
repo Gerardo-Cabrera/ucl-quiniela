@@ -43,6 +43,19 @@ async def get_my_predictions(
     return predictions
 
 
+@router.get("/user/{user_id}", response_model=list[PredictionOut])
+async def get_user_predictions(
+    user_id: int,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    """Pronósticos de otro participante, revelados por jornada: solo los de partidos
+    cuya jornada (día) ya arrancó (su primer partido). Las jornadas por empezar no
+    se muestran, así nadie ve pronósticos de partidos que aún no comienzan."""
+    visible = await match_crud.started_day_match_ids(db, _TOURNAMENT_TZ)
+    return await prediction_crud.get_by_user(db, user_id, only_match_ids=visible)
+
+
 @router.get("/override", response_model=PredictionOverrideOut, summary="Admin: estado de la prórroga de pronósticos")
 async def get_prediction_override(
     db: AsyncSession = Depends(get_db),

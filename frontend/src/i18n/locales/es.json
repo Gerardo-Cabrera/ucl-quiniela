@@ -3,7 +3,8 @@
     "loading": "Cargando...",
     "vs": "vs",
     "pts": "pts",
-    "dash": "—"
+    "dash": "—",
+    "close": "Cerrar"
   },
   "brand": {
     "name": "UCL",
@@ -20,8 +21,18 @@
     "aciertos": "Aciertos",
     "jornada": "Jornada",
     "mvps": "MVPs",
-    "changePassword": "Cambiar contraseña",
+    "profile": "Perfil",
     "logout": "Salir"
+  },
+  "profile": {
+    "title": "Perfil",
+    "aliasSection": "Alias",
+    "hint": "Tu alias es opcional; también sirve para iniciar sesión.",
+    "save": "Guardar",
+    "saved": "Cambios guardados.",
+    "noChanges": "No hay cambios que guardar.",
+    "passwordIncomplete": "Para cambiar la contraseña, completa los tres campos.",
+    "back": "Volver"
   },
   "auth": {
     "tabLogin": "Entrar",
@@ -49,16 +60,13 @@
     "resetHint": "Confirma tu email y el nombre de tu equipo, y define una nueva contraseña.",
     "resetSubmit": "Restablecer contraseña",
     "resetSuccess": "Contraseña restablecida. Ya puedes entrar.",
+    "registerSuccess": "¡Cuenta creada con éxito! Ya puedes iniciar sesión.",
     "changePassword": {
       "title": "Cambiar contraseña",
-      "voluntaryHint": "Ingresa tu contraseña actual y la nueva.",
       "current": "Contraseña actual",
       "new": "Nueva contraseña",
       "confirm": "Confirmar nueva contraseña",
-      "submit": "Guardar contraseña",
-      "cancel": "Cancelar",
-      "mismatch": "Las contraseñas no coinciden.",
-      "success": "Contraseña actualizada."
+      "mismatch": "Las contraseñas no coinciden."
     }
   },
   "dashboard": {
@@ -73,6 +81,7 @@
     "you": "(tú)",
     "legendMatches": "Partidos",
     "legendTop8": "Top 8",
+    "viewPredictions": "Ver pronósticos",
     "emptyTitle": "Sin datos aún",
     "emptyDescription": "Los puntos aparecerán cuando haya partidos finalizados."
   },
@@ -114,6 +123,11 @@
     "emptyDescription": "Ve a la sección de Partidos para registrar tus pronósticos.",
     "real": "Real: {{home}} - {{away}}",
     "delete": "Eliminar pronóstico"
+  },
+  "userPredictions": {
+    "subtitle": "Pronósticos revelados de las jornadas ya iniciadas",
+    "emptyTitle": "Aún no hay pronósticos visibles",
+    "emptyDescription": "Los pronósticos de este participante se revelan cuando arranca el primer partido de cada jornada."
   },
   "predictionModal": {
     "titleEdit": "Editar Pronóstico",

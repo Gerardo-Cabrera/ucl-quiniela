@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models.user import User
-from app.schemas import UserCreate, UserLogin, UserOut, Token, PasswordChange, PasswordReset
+from app.schemas import UserCreate, UserLogin, UserOut, Token, PasswordChange, PasswordReset, ProfileUpdate
 from app.core.security import hash_password, verify_password, create_access_token
 from app.core.deps import get_current_user
 from app.core.rate_limit import limiter
@@ -65,6 +65,23 @@ async def change_password(
     if data.new_password == data.current_password:
         raise HTTPException(status_code=400, detail="La nueva contraseña debe ser distinta de la actual.")
     await user_crud.update_password(db, current_user, hashed_password=hash_password(data.new_password))
+    return current_user
+
+
+@router.patch("/me", response_model=UserOut)
+async def update_profile(
+    data: ProfileUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Actualiza el perfil del usuario autenticado. Por ahora solo el alias
+    (opcional; vacío lo quita). Rechaza el alias si ya lo usa otro usuario."""
+    if data.alias is not None:
+        owner = await user_crud.get_by_alias(db, data.alias)
+        if owner and owner.id != current_user.id:
+            raise HTTPException(status_code=409, detail="Ese alias ya está en uso.")
+    current_user.alias = data.alias
+    await db.flush()
     return current_user
 
 

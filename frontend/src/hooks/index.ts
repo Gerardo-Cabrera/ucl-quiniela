@@ -89,6 +89,15 @@ export const useMyPredictions = () =>
     queryFn:  predictionsApi.getMine,
   });
 
+// Pronósticos de otro participante, revelados por jornada iniciada (backend).
+// enabled solo cuando hay usuario seleccionado (modal abierto).
+export const useUserPredictions = (userId: number | null) =>
+  useQuery({
+    queryKey: ["predictions", "user", userId],
+    queryFn:  () => predictionsApi.getForUser(userId!),
+    enabled:  userId != null,
+  });
+
 export const useSavePrediction = () => {
   const qc = useQueryClient();
   return useMutation({

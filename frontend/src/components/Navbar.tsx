@@ -1,5 +1,5 @@
 import { NavLink, useNavigate } from "react-router-dom";
-import { Trophy, CalendarDays, ListChecks, Star, Target, CalendarRange, Crown, LogOut, User, KeyRound } from "lucide-react";
+import { Trophy, CalendarDays, ListChecks, Star, Target, CalendarRange, Crown, LogOut, User } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useAuthStore } from "@/store/authStore";
 import { clsx } from "clsx";
@@ -65,10 +65,10 @@ export function Navbar() {
             <span className="text-xs text-ucl-silver truncate">{user?.team_name}</span>
           </div>
           <button
-            onClick={() => navigate("/change-password")}
+            onClick={() => navigate("/profile")}
             className="w-full flex items-center gap-2 px-2 py-2 mb-2 rounded-lg text-sm text-ucl-silver hover:text-ucl-white hover:bg-ucl-blue/30 transition-colors"
           >
-            <KeyRound size={14} /> {t("nav.changePassword")}
+            <User size={14} /> {t("nav.profile")}
           </button>
           <button onClick={handleLogout} className="btn-secondary w-full flex items-center justify-center gap-2 text-sm py-2">
             <LogOut size={14} /> {t("nav.logout")}
@@ -82,11 +82,11 @@ export function Navbar() {
         <h1 className="font-display text-2xl text-ucl-gold tracking-wider">{t("brand.name")}</h1>
         <div className="flex items-center gap-1">
           <button
-            onClick={() => navigate("/change-password")}
-            aria-label={t("nav.changePassword")}
+            onClick={() => navigate("/profile")}
+            aria-label={t("nav.profile")}
             className="p-2 rounded-lg text-ucl-silver hover:text-ucl-white hover:bg-ucl-blue/30 transition-colors"
           >
-            <KeyRound size={18} />
+            <User size={18} />
           </button>
           <button
             onClick={handleLogout}

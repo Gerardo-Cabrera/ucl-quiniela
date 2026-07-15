@@ -255,6 +255,48 @@ async def test_reset_password_short_new(client: AsyncClient):
     assert resp.status_code == 422
 
 
+# ── PERFIL: alias opcional ───────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_update_alias_success(auth_client: AsyncClient):
+    """Estando logueado, se puede fijar el alias y luego iniciar sesión con él."""
+    resp = await auth_client.patch("/api/auth/me", json={"alias": "ElCapo"})
+    assert resp.status_code == 200
+    assert resp.json()["alias"] == "ElCapo"
+    assert (await auth_client.post("/api/auth/login", json={
+        "identifier": "ElCapo", "password": "testpass123"})).status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_update_alias_clear(auth_client: AsyncClient):
+    """El alias es opcional: enviarlo en blanco lo quita (None)."""
+    await auth_client.patch("/api/auth/me", json={"alias": "TempAlias"})
+    resp = await auth_client.patch("/api/auth/me", json={"alias": ""})
+    assert resp.status_code == 200
+    assert resp.json()["alias"] is None
+
+
+@pytest.mark.asyncio
+async def test_update_alias_too_short(auth_client: AsyncClient):
+    resp = await auth_client.patch("/api/auth/me", json={"alias": "ab"})
+    assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_update_alias_conflict(auth_client: AsyncClient):
+    """No se puede tomar un alias que ya usa otro usuario."""
+    await auth_client.post("/api/auth/register", json={
+        "team_name": "Otro FC", "email": "otro@test.com", "password": "pass1234", "alias": "Tomado"})
+    resp = await auth_client.patch("/api/auth/me", json={"alias": "Tomado"})
+    assert resp.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_update_profile_requires_auth(client: AsyncClient):
+    assert (await client.patch("/api/auth/me", json={"alias": "X"})).status_code == 401
+
+
 @pytest.mark.asyncio
 async def test_config_teams_from_db(client: AsyncClient):
     """El selector del Top 8 lee los clubes de la BD (sincronizados desde la API)."""

@@ -10,6 +10,19 @@ def _check_password(v: str) -> str:
     return v
 
 
+def _normalize_alias(v: Optional[str]) -> Optional[str]:
+    """Regla única del alias (registro y perfil): opcional; en blanco → None;
+    si se indica, mín. 3 caracteres."""
+    if v is None:
+        return None
+    v = v.strip()
+    if not v:
+        return None
+    if len(v) < 3:
+        raise ValueError("El alias debe tener al menos 3 caracteres.")
+    return v
+
+
 class UserCreate(BaseModel):
     # El nombre de equipo es texto libre (mín. 3 caracteres tras recortar espacios).
     team_name: str = Field(max_length=100)
@@ -29,14 +42,7 @@ class UserCreate(BaseModel):
     @field_validator("alias")
     @classmethod
     def _validate_alias(cls, v: Optional[str]) -> Optional[str]:
-        if v is None:
-            return None
-        v = v.strip()
-        if not v:            # alias en blanco → sin alias
-            return None
-        if len(v) < 3:
-            raise ValueError("El alias debe tener al menos 3 caracteres.")
-        return v
+        return _normalize_alias(v)
 
     @field_validator("password")
     @classmethod
@@ -67,6 +73,17 @@ class PasswordReset(BaseModel):
     @classmethod
     def _validate_new_password(cls, v: str) -> str:
         return _check_password(v)
+
+
+class ProfileUpdate(BaseModel):
+    """Edición del perfil del usuario autenticado. El alias es opcional
+    (vacío = quitarlo)."""
+    alias: Optional[str] = Field(default=None, max_length=100)
+
+    @field_validator("alias")
+    @classmethod
+    def _validate_alias(cls, v: Optional[str]) -> Optional[str]:
+        return _normalize_alias(v)
 
 
 class UserLogin(BaseModel):
