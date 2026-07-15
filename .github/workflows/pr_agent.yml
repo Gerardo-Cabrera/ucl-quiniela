@@ -32,12 +32,13 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GOOGLE_AI_STUDIO.GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          # Modelos del free tier ACTUAL de Gemini. gemini-2.0-flash dejó de tener
-          # free tier (la API responde 429 con quota "limit: 0" para ese modelo), por
-          # eso se usa 2.5. Si Google vuelve a cambiar la disponibilidad, actualiza
-          # estos nombres (https://ai.google.dev/gemini-api/docs/rate-limits).
-          config.model: "gemini/gemini-2.5-flash"
-          config.fallback_models: '["gemini/gemini-2.5-flash-lite"]'
+          # Alias "-latest" del free tier de Gemini: apuntan siempre al flash vigente
+          # y están disponibles para keys nuevas. Los nombres fijos por versión se
+          # retiran para "nuevos usuarios" (404) o pierden free tier (429 "limit: 0"),
+          # p. ej. gemini-2.0-flash y gemini-2.5-flash. Ref:
+          # https://ai.google.dev/gemini-api/docs/models
+          config.model: "gemini/gemini-flash-latest"
+          config.fallback_models: '["gemini/gemini-flash-lite-latest"]'
           # Límite de tokens para modelos que PR-Agent no tiene en su registro
           # MAX_TOKENS (el de respaldo): sin esto el fallback falla al no saber su tope.
           config.custom_model_max_tokens: "1048576"
