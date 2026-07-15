@@ -32,15 +32,18 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GOOGLE_AI_STUDIO.GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          # Modelo del free tier de Gemini. Si Google cambia la disponibilidad,
-          # actualiza estos nombres (ver https://ai.google.dev/gemini-api/docs/models).
-          config.model: "gemini/gemini-2.0-flash"
-          config.fallback_models: '["gemini/gemini-2.0-flash-lite"]'
-          # Al abrir un PR: resumen (describe) y revisión (review) automáticos.
-          # auto_improve (sugerencias de código) queda desactivado: con el free tier
-          # de Gemini son varias llamadas por PR y el paso de sugerencias (salida
-          # estructurada estricta) falla/límite. Sigue disponible a demanda con el
-          # comando /improve en un comentario, igual que /review, /describe, /ask.
+          # Modelos del free tier ACTUAL de Gemini. gemini-2.0-flash dejó de tener
+          # free tier (la API responde 429 con quota "limit: 0" para ese modelo), por
+          # eso se usa 2.5. Si Google vuelve a cambiar la disponibilidad, actualiza
+          # estos nombres (https://ai.google.dev/gemini-api/docs/rate-limits).
+          config.model: "gemini/gemini-2.5-flash"
+          config.fallback_models: '["gemini/gemini-2.5-flash-lite"]'
+          # Límite de tokens para modelos que PR-Agent no tiene en su registro
+          # MAX_TOKENS (el de respaldo): sin esto el fallback falla al no saber su tope.
+          config.custom_model_max_tokens: "1048576"
+          # Al abrir un PR: descripción, revisión y sugerencias automáticas. Todas
+          # disponibles también a demanda por comentario (/describe, /review,
+          # /improve, /ask).
           github_action_config.auto_review: "true"
           github_action_config.auto_describe: "true"
-          github_action_config.auto_improve: "false"
+          github_action_config.auto_improve: "true"
