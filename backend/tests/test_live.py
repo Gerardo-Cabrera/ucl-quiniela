@@ -6,8 +6,10 @@ partidos recién finalizados).
 from datetime import datetime, timedelta, timezone
 
 import pytest
+from sqlalchemy import select
 
 from app.models.match import Match, MatchPhase, MatchStatus
+from app.models.team import Team
 from app.services import ucl_api
 from app.services import scheduler as scheduler_module
 from tests.conftest import TestSessionLocal
@@ -66,6 +68,20 @@ def test_parse_recent_live_stays_live():
         _fixture(status="1H", round_="League Stage", minutes_ago=10)
     )
     assert parsed["status"] == MatchStatus.LIVE
+
+
+def test_parse_skips_fase_previa():
+    """Las rondas de clasificación (fase previa) se descartan: parse_fixture → None.
+    'Play-offs' (clasificación) es distinto de 'Knockout Round Play-offs' (oficial)."""
+    assert ucl_api.parse_fixture(_fixture(round_="3rd Qualifying Round")) is None
+    assert ucl_api.parse_fixture(_fixture(round_="Play-offs")) is None
+
+
+def test_parse_league_stage_matchday():
+    """La fase de liga del formato nuevo llega como 'League Stage - N' (jornada)."""
+    parsed = ucl_api.parse_fixture(_fixture(round_="League Stage - 3"))
+    assert parsed is not None
+    assert parsed["phase"] == MatchPhase.LEAGUE
 
 
 # ── TEMPORADA Y CLUBES (vía API) ────────────────────────────────────────────────
@@ -137,3 +153,52 @@ async def test_sync_fixtures_reports_newly_finished(monkeypatch):
         m = await session.get(Match, match_id)
         assert m.status == MatchStatus.FINISHED
         assert m.home_score == 2 and m.away_score == 1
+
+
+@pytest.mark.asyncio
+async def test_sync_fixtures_skips_fase_previa(monkeypatch):
+    """El sync descarta los fixtures de fase previa y solo persiste los oficiales."""
+    async def fake_fetch_fixtures():
+        return [
+            _fixture(fid=9001, round_="2nd Qualifying Round"),
+            _fixture(fid=9002, round_="League Stage - 1"),
+        ]
+
+    monkeypatch.setattr(ucl_api, "fetch_fixtures", fake_fetch_fixtures)
+    await scheduler_module._do_sync_fixtures()
+
+    async with TestSessionLocal() as session:
+        ids = {r[0] for r in (await session.execute(select(Match.api_fixture_id))).all()}
+    assert ids == {9002}
+
+
+@pytest.mark.asyncio
+async def test_sync_teams_skipped_without_matches(monkeypatch):
+    """Sin partidos oficiales en BD, el sync de clubes ni siquiera llama a la API."""
+    called = False
+
+    async def fake_fetch_teams():
+        nonlocal called
+        called = True
+        return []
+
+    monkeypatch.setattr(ucl_api, "fetch_teams", fake_fetch_teams)
+    await scheduler_module._do_sync_teams()
+    assert called is False
+
+
+@pytest.mark.asyncio
+async def test_sync_teams_runs_with_matches(monkeypatch):
+    """Con al menos un partido oficial en BD, el sync de clubes sí persiste."""
+    await _add_match()
+
+    async def fake_fetch_teams():
+        return [{"team": {"id": 999, "name": "Test United", "code": "TU",
+                          "country": "England", "logo": "x.png"}}]
+
+    monkeypatch.setattr(ucl_api, "fetch_teams", fake_fetch_teams)
+    await scheduler_module._do_sync_teams()
+
+    async with TestSessionLocal() as session:
+        names = {r[0] for r in (await session.execute(select(Team.name))).all()}
+    assert "Test United" in names

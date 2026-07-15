@@ -80,7 +80,12 @@ async def _do_sync_fixtures() -> list[int]:
     """Upsert de fixtures. Devuelve los ids de partidos que pasaron a FINISHED en
     esta corrida (para puntuarlos de inmediato tras el pitazo final)."""
     fixtures = await ucl_api.fetch_fixtures()
-    parsed = [ucl_api.parse_fixture(f) for f in fixtures]
+    # parse_fixture devuelve None para la fase previa (clasificación): se descarta,
+    # la quiniela solo cubre de la fase de liga en adelante.
+    parsed = [p for f in fixtures if (p := ucl_api.parse_fixture(f)) is not None]
+    skipped = len(fixtures) - len(parsed)
+    if skipped:
+        logger.info("Omitidos %d fixtures de fase previa.", skipped)
     newly_finished: list[int] = []
 
     def _detect_finish(match: Match, row: dict) -> None:
@@ -147,6 +152,14 @@ async def sync_ucl_fixtures():
 
 
 async def _do_sync_teams():
+    # Los clubes solo se guardan cuando la competición ya existe en BD (fase de liga
+    # en adelante): sin partidos oficiales el selector del Top 8 queda vacío y no se
+    # gasta cuota de la API durante la fase previa.
+    async with AsyncSessionLocal() as db:
+        has_matches = (await db.execute(select(Match.id).limit(1))).first() is not None
+    if not has_matches:
+        logger.info("Sync de clubes omitido: aún no hay partidos oficiales en BD.")
+        return
     teams = await ucl_api.fetch_teams()
     parsed = [ucl_api.parse_team(t) for t in teams]
     async with AsyncSessionLocal() as db:
