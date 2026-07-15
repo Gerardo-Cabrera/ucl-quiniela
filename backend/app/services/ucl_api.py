@@ -34,15 +34,26 @@ async def close_client() -> None:
         await _client.aclose()
     _client = None
 
-# Mapeo de rondas de API-Football → MatchPhase interna
+# Rondas OFICIALES de eliminatoria de API-Football → fase interna. La fase de liga
+# se resuelve aparte (por prefijo) porque llega como "League Stage" o "League
+# Stage - N" (jornada). Cualquier ronda que no esté aquí ni sea de liga pertenece a
+# la FASE PREVIA (clasificación) y se descarta: no forma parte de la quiniela.
 ROUND_MAP = {
-    "League Stage":             MatchPhase.LEAGUE,
     "Knockout Round Play-offs": MatchPhase.KNOCKOUT_PLAYOFFS,
     "Round of 16":              MatchPhase.ROUND_OF_16,
     "Quarter-finals":           MatchPhase.QUARTER_FINALS,
     "Semi-finals":              MatchPhase.SEMI_FINALS,
     "Final":                    MatchPhase.FINAL,
 }
+
+
+def _resolve_phase(raw_round: str) -> MatchPhase | None:
+    """Fase interna de una ronda de API-Football; None si es FASE PREVIA (rondas de
+    clasificación), que se descarta. La fase de liga llega como 'League Stage' o
+    'League Stage - N' (jornada), por eso se resuelve por prefijo."""
+    if raw_round.startswith("League Stage"):
+        return MatchPhase.LEAGUE
+    return ROUND_MAP.get(raw_round)
 
 # Mapeo de status de API-Football → MatchStatus interna
 STATUS_MAP = {
@@ -187,10 +198,10 @@ def parse_squad(squad_data: dict) -> list[dict]:
     return parsed
 
 
-def parse_fixture(fixture_data: dict) -> dict:
-    """
-    Transforma el formato de API-Football al formato interno.
-    """
+def parse_fixture(fixture_data: dict) -> dict | None:
+    """Transforma el formato de API-Football al interno. Devuelve None si el partido
+    es de la FASE PREVIA (rondas de clasificación): esos no se guardan, la quiniela
+    solo cubre de la fase de liga en adelante."""
     f = fixture_data["fixture"]
     teams = fixture_data["teams"]
     goals = fixture_data["goals"]
@@ -198,10 +209,9 @@ def parse_fixture(fixture_data: dict) -> dict:
     # Tanda de penales (solo en eliminatorias empatadas): None fuera de ese caso.
     penalty = (fixture_data.get("score") or {}).get("penalty") or {}
 
-    raw_round  = league.get("round", "League Stage")
-    phase      = ROUND_MAP.get(raw_round, MatchPhase.LEAGUE)
-    if raw_round not in ROUND_MAP:
-        logger.warning("Ronda desconocida de API-Football: %r (usando LEAGUE)", raw_round)
+    phase = _resolve_phase(league.get("round", "League Stage"))
+    if phase is None:
+        return None  # fase previa: fuera del alcance de la quiniela
     raw_status = f["status"]["short"]
     status     = STATUS_MAP.get(raw_status, MatchStatus.SCHEDULED)
     match_date = datetime.fromisoformat(f["date"])
