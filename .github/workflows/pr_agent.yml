@@ -32,15 +32,23 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GOOGLE_AI_STUDIO.GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          # Modelo del free tier de Gemini. Si Google cambia la disponibilidad,
-          # actualiza estos nombres (ver https://ai.google.dev/gemini-api/docs/models).
-          config.model: "gemini/gemini-2.0-flash"
-          config.fallback_models: '["gemini/gemini-2.0-flash-lite"]'
-          # Al abrir un PR: resumen (describe) y revisión (review) automáticos.
-          # auto_improve (sugerencias de código) queda desactivado: con el free tier
-          # de Gemini son varias llamadas por PR y el paso de sugerencias (salida
-          # estructurada estricta) falla/límite. Sigue disponible a demanda con el
-          # comando /improve en un comentario, igual que /review, /describe, /ask.
+          # Alias "-latest" del free tier de Gemini: apuntan siempre al flash vigente
+          # y están disponibles para keys nuevas. Los nombres fijos por versión se
+          # retiran para "nuevos usuarios" (404) o pierden free tier (429 "limit: 0"),
+          # p. ej. gemini-2.0-flash y gemini-2.5-flash. Ref:
+          # https://ai.google.dev/gemini-api/docs/models
+          config.model: "gemini/gemini-flash-latest"
+          config.fallback_models: '["gemini/gemini-flash-lite-latest"]'
+          # Límite de tokens para modelos que PR-Agent no tiene en su registro
+          # MAX_TOKENS (el de respaldo): sin esto el fallback falla al no saber su tope.
+          config.custom_model_max_tokens: "1048576"
+          # Al abrir un PR: descripción, revisión y sugerencias automáticas. Todas
+          # disponibles también a demanda por comentario (/describe, /review,
+          # /improve, /ask).
           github_action_config.auto_review: "true"
           github_action_config.auto_describe: "true"
-          github_action_config.auto_improve: "false"
+          github_action_config.auto_improve: "true"
+          # Sugerencias en UNA sola llamada: se omite la 2ª de auto-evaluación, que en
+          # el free tier pega 503 transitorios y hacía fallar la publicación pese a
+          # haberse generado. Así improve es tan fiable como review.
+          pr_code_suggestions.self_reflect_on_suggestions: "false"
