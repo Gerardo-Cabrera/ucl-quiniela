@@ -48,3 +48,7 @@ jobs:
           github_action_config.auto_review: "true"
           github_action_config.auto_describe: "true"
           github_action_config.auto_improve: "true"
+          # Sugerencias en UNA sola llamada: se omite la 2ª de auto-evaluación, que en
+          # el free tier pega 503 transitorios y hacía fallar la publicación pese a
+          # haberse generado. Así improve es tan fiable como review.
+          pr_code_suggestions.self_reflect_on_suggestions: "false"
