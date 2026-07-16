@@ -69,7 +69,7 @@ export function Spinner({ size = "md" }: { size?: "sm" | "md" | "lg" }) {
 // ── EMPTY STATE ───────────────────────────────────────────────────────────────
 
 export function EmptyState({ icon, title, description }: {
-  icon: string;
+  icon: ReactNode;   // emoji (string) o cualquier nodo, p. ej. <img> del trofeo
   title: string;
   description?: string;
 }) {

@@ -28,7 +28,7 @@ export default function Dashboard() {
   }
 
   if (!leaderboard?.length) {
-    return <EmptyState icon="🏆" title={t("dashboard.emptyTitle")} description={t("dashboard.emptyDescription")} />;
+    return <EmptyState icon={<img src="/ucl.png" alt="" className="h-24 w-auto" />} title={t("dashboard.emptyTitle")} description={t("dashboard.emptyDescription")} />;
   }
 
   const myEntry = leaderboard.find((e) => e.team_name === user?.team_name);
