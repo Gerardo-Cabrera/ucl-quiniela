@@ -22,26 +22,23 @@ export default function ProfilePage() {
   const [error, setError]     = useState("");
   const [loading, setLoading] = useState(false);
 
+  // Validez derivada (un solo lugar): el botón se habilita solo si hay al menos un
+  // cambio VÁLIDO. Los hints de cada campo guían el criterio; el backend re-valida.
+  const normalizedTeam  = teamName.trim();
+  const normalizedAlias = alias.trim();
+  const teamChanged   = normalizedTeam  !== (user?.team_name ?? "");
+  const aliasChanged  = normalizedAlias !== (user?.alias ?? "");
+  const wantsPassword = Boolean(current || next || confirm);
+  const passwordMismatch = Boolean(next && confirm && next !== confirm);
+
+  const teamValid     = !teamChanged  || normalizedTeam.length >= 3;
+  const aliasValid    = !aliasChanged || normalizedAlias === "" || normalizedAlias.length >= 3;
+  const passwordValid = !wantsPassword || (current.length > 0 && next.length >= 6 && next === confirm);
+  const canSave = (teamChanged || aliasChanged || wantsPassword) && teamValid && aliasValid && passwordValid;
+
   const save = async () => {
+    if (!canSave || loading) return;   // el botón ya lo refleja; guarda también al pulsar Enter
     setError("");
-    const normalizedTeam  = teamName.trim();
-    const normalizedAlias = alias.trim();
-    const teamChanged  = normalizedTeam  !== (user?.team_name ?? "");
-    const aliasChanged = normalizedAlias !== (user?.alias ?? "");
-    const wantsPassword = Boolean(current || next || confirm);
-
-    // Validaciones locales (el backend re-valida).
-    if (teamChanged && normalizedTeam.length < 3) { setError(t("auth.errTeamShort")); return; }
-    if (aliasChanged && normalizedAlias && normalizedAlias.length < 3) {
-      setError(t("auth.errAliasShort")); return;
-    }
-    if (wantsPassword) {
-      if (!current || !next || !confirm) { setError(t("profile.passwordIncomplete")); return; }
-      if (next !== confirm) { setError(t("auth.changePassword.mismatch")); return; }
-      if (next.length < 6) { setError(t("auth.errPasswordShort")); return; }
-    }
-    if (!teamChanged && !aliasChanged && !wantsPassword) { setError(t("profile.noChanges")); return; }
-
     setLoading(true);
     try {
       // Contraseña primero: si falla (actual incorrecta), no toca el perfil.
@@ -92,6 +89,7 @@ export default function ProfilePage() {
             onKeyDown={(e) => e.key === "Enter" && save()}
             placeholder={t("auth.teamPlaceholder")} className="input-base w-full" aria-label={t("auth.yourTeam")}
           />
+          <p className="text-xs text-ucl-silver/50 mt-1.5">{t("profile.teamHint")}</p>
         </div>
         {readonly(t("auth.email"), user?.email ?? "")}
         <div>
@@ -112,6 +110,10 @@ export default function ProfilePage() {
             {pwField(t("auth.changePassword.new"), next, setNext)}
             {pwField(t("auth.changePassword.confirm"), confirm, setConfirm)}
           </div>
+          <p className="text-xs text-ucl-silver/50 mt-2">{t("profile.passwordHint")}</p>
+          {passwordMismatch && (
+            <p className="text-xs text-red-400 mt-1">{t("auth.changePassword.mismatch")}</p>
+          )}
         </div>
 
         {error && (
@@ -120,7 +122,7 @@ export default function ProfilePage() {
           </div>
         )}
 
-        <button onClick={save} disabled={loading} className="btn-primary w-full flex items-center justify-center gap-2 mt-2">
+        <button onClick={save} disabled={loading || !canSave} className="btn-primary w-full flex items-center justify-center gap-2 mt-2">
           {loading ? <><Spinner size="sm" /> {t("common.loading")}</> : t("profile.save")}
         </button>
       </div>

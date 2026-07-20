@@ -28,11 +28,11 @@
   "profile": {
     "title": "Perfil",
     "account": "Datos de la cuenta",
-    "hint": "Tu alias es opcional; también sirve para iniciar sesión.",
+    "teamHint": "Mínimo 3 caracteres.",
+    "hint": "Opcional (mín. 3 caracteres); también sirve para iniciar sesión.",
+    "passwordHint": "Para cambiarla, completa los tres campos; la nueva debe tener al menos 6 caracteres.",
     "save": "Guardar",
     "saved": "Cambios guardados.",
-    "noChanges": "No hay cambios que guardar.",
-    "passwordIncomplete": "Para cambiar la contraseña, completa los tres campos.",
     "back": "Volver"
   },
   "auth": {
