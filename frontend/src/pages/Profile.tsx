@@ -89,7 +89,7 @@ export default function ProfilePage() {
             onKeyDown={(e) => e.key === "Enter" && save()}
             placeholder={t("auth.teamPlaceholder")} className="input-base w-full" aria-label={t("auth.yourTeam")}
           />
-          <p className="text-xs text-ucl-silver/50 mt-1.5">{t("profile.teamHint")}</p>
+          <p className="text-xs text-ucl-silver/50 mt-1.5">{t("auth.teamHint")}</p>
         </div>
         {readonly(t("auth.email"), user?.email ?? "")}
         <div>
@@ -99,7 +99,7 @@ export default function ProfilePage() {
             onKeyDown={(e) => e.key === "Enter" && save()}
             placeholder={t("auth.aliasPlaceholder")} className="input-base w-full" aria-label={t("auth.alias")}
           />
-          <p className="text-xs text-ucl-silver/50 mt-1.5">{t("profile.hint")}</p>
+          <p className="text-xs text-ucl-silver/50 mt-1.5">{t("auth.aliasHint")}</p>
         </div>
 
         {/* Contraseña (dejar en blanco si no se cambia) */}
