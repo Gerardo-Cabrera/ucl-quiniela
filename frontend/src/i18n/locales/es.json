@@ -156,6 +156,7 @@
     "saving": "Guardando...",
     "saved": "Guardado",
     "locked": "🔒 Tu Top 8 ya fue calculado y no puede modificarse.",
+    "lockedSeason": "🔒 La temporada ya comenzó: tu Top 8 es inmodificable.",
     "teamsTitle": "Equipos UCL",
     "searchPlaceholder": "Buscar equipo..."
   },

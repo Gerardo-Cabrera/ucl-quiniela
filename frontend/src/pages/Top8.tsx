@@ -10,7 +10,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { GripVertical, Search, Check } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { useMyTop8, useSaveTop8, useTeamsConfig } from "@/hooks";
+import { useMyTop8, useSaveTop8, useTeamsConfig, useMatches } from "@/hooks";
 import { Spinner, PointsChip } from "@/components/ui";
 import { clsx } from "clsx";
 
@@ -52,11 +52,11 @@ export default function Top8Page() {
   const { data: savedPicks, isLoading } = useMyTop8();
   const { mutate: save, isPending, isSuccess, reset } = useSaveTop8();
   const { data: teamsConfig } = useTeamsConfig();
+  const { data: matches } = useMatches();
   const uclTeams = teamsConfig?.ucl_teams ?? [];
 
   const [picks, setPicks]   = useState<PickItem[]>([]);
   const [search, setSearch] = useState("");
-  const [locked, setLocked] = useState(false);
 
   const sensors = useSensors(useSensor(PointerSensor));
 
@@ -69,9 +69,14 @@ export default function Top8Page() {
           .sort((a, b) => a.position - b.position)
           .map((p) => ({ id: p.team_name, team_name: p.team_name }))
       );
-      setLocked(savedPicks.some((p) => p.is_calculated));
     }
   }, [savedPicks]);
+
+  // El Top 8 se fija al arrancar la temporada (primer partido) o tras calcularlo;
+  // antes de eso es editable. El backend aplica la misma regla al guardar.
+  const calculated    = savedPicks?.some((p) => p.is_calculated) ?? false;
+  const seasonStarted = (matches ?? []).some((m) => Date.parse(m.match_date) <= Date.now());
+  const locked        = calculated || seasonStarted;
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
@@ -198,7 +203,7 @@ export default function Top8Page() {
 
           {locked && (
             <div className="mt-4 bg-ucl-gold/10 border border-ucl-gold/20 rounded-lg px-4 py-3 text-sm text-ucl-gold/80">
-              {t("top8.locked")}
+              {calculated ? t("top8.locked") : t("top8.lockedSeason")}
             </div>
           )}
         </div>

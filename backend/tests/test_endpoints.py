@@ -454,6 +454,23 @@ async def test_top8_rejects_duplicate_team(auth_client: AsyncClient):
 
 
 @pytest.mark.asyncio
+async def test_top8_locked_after_season_start(auth_client: AsyncClient):
+    """El Top 8 se fija al arrancar la temporada: con el primer partido ya en juego,
+    guardar se rechaza."""
+    async with TestSessionLocal() as session:
+        session.add(Match(
+            api_fixture_id=7777, home_team="Real Madrid", away_team="Barcelona",
+            phase=MatchPhase.LEAGUE, status=MatchStatus.LIVE,
+            match_date=datetime.now(timezone.utc) - timedelta(minutes=5),
+        ))
+        await session.commit()
+
+    resp = await auth_client.post("/api/top8/", json=_picks_payload(VALID_TOP8))
+    assert resp.status_code == 400
+    assert "antes del primer partido" in resp.json()["detail"]
+
+
+@pytest.mark.asyncio
 async def test_top8_calculate_requires_admin(auth_client: AsyncClient):
     resp = await auth_client.post("/api/top8/calculate", json={"actual_top8": VALID_TOP8})
     assert resp.status_code == 403
