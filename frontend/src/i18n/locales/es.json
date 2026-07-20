@@ -4,7 +4,8 @@
     "vs": "vs",
     "pts": "pts",
     "dash": "—",
-    "close": "Cerrar"
+    "close": "Cerrar",
+    "errorGeneric": "No se pudo completar la acción. Intenta de nuevo."
   },
   "brand": {
     "name": "UCL",

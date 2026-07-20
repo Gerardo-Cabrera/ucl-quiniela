@@ -1,12 +1,25 @@
-import { useEffect } from "react";
+import { useCallback, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import toast from "react-hot-toast";
 import { matchesApi, predictionsApi, leaderboardApi, top8Api, configApi, statsApi, matchdaysApi } from "@/api";
+import { apiErrorMessage } from "@/lib/apiError";
 import { useAuthStore } from "@/store/authStore";
 import { LAST_ACTIVITY_KEY, SESSION_IDLE_MS } from "@/config";
 import type { MatchPhase, MatchStatus } from "@/types";
+
+/** onError reutilizable para mutaciones sin área de error propia: muestra el
+ *  detalle del backend (o un mensaje genérico) en un toast, evitando fallos
+ *  silenciosos. El modal de pronóstico ya muestra su error inline, así que ese
+ *  hook no lo usa. */
+const useErrorToast = () => {
+  const { t } = useTranslation();
+  return useCallback(
+    (err: unknown) => toast.error(apiErrorMessage(err, t("common.errorGeneric"))),
+    [t],
+  );
+};
 
 // ── SESIÓN ──────────────────────────────────────────────────────────────────
 
@@ -110,8 +123,10 @@ export const useSavePrediction = () => {
 
 export const useDeletePrediction = () => {
   const qc = useQueryClient();
+  const onError = useErrorToast();
   return useMutation({
     mutationFn: predictionsApi.delete,
+    onError,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["predictions"] });
     },
@@ -128,8 +143,10 @@ export const usePredictionOverride = (enabled: boolean) =>
 
 export const useSetPredictionOverride = () => {
   const qc = useQueryClient();
+  const onError = useErrorToast();
   return useMutation({
     mutationFn: predictionsApi.setOverride,
+    onError,
     onSuccess: () => {
       // Cambió la ventana: refresca partidos (predictable) y el propio estado.
       qc.invalidateQueries({ queryKey: ["predictions", "override"] });
@@ -173,8 +190,10 @@ export const useMyTop8 = () =>
 
 export const useSaveTop8 = () => {
   const qc = useQueryClient();
+  const onError = useErrorToast();
   return useMutation({
     mutationFn: top8Api.save,
+    onError,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["top8"] });
     },
