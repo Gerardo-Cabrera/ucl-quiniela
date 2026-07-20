@@ -63,7 +63,9 @@ export default function Top8Page() {
   useEffect(() => {
     if (savedPicks?.length) {
       setPicks(
-        savedPicks
+        // Copia antes de ordenar: .sort() muta en sitio y savedPicks es el array
+        // cacheado por react-query (no se debe mutar).
+        [...savedPicks]
           .sort((a, b) => a.position - b.position)
           .map((p) => ({ id: p.team_name, team_name: p.team_name }))
       );
@@ -217,24 +219,23 @@ export default function Top8Page() {
           </div>
 
           <div className="space-y-1.5 max-h-[420px] overflow-y-auto pr-1">
+            {/* Los equipos ya elegidos salen de `filtered` (arriba), así que aquí
+                solo aparecen los disponibles: al seleccionar uno, desaparece. */}
             {filtered.map((team) => {
-              const selected = !!picks.find((p) => p.team_name === team);
+              const full = picks.length >= 8 || locked;   // 8 elegidos o Top 8 bloqueado
               return (
                 <button
                   key={team}
                   onClick={() => addTeam(team)}
-                  disabled={picks.length >= 8 || locked || selected}
+                  disabled={full}
                   className={clsx(
-                    "w-full flex items-center justify-between px-4 py-2.5 rounded-lg text-sm text-left transition-all duration-150",
-                    selected
-                      ? "bg-ucl-gold/10 text-ucl-gold/60 cursor-default"
-                      : picks.length >= 8 || locked
+                    "w-full px-4 py-2.5 rounded-lg text-sm text-left transition-all duration-150",
+                    full
                       ? "opacity-30 cursor-not-allowed text-ucl-silver"
                       : "hover:bg-ucl-blue/30 hover:text-ucl-white text-ucl-silver"
                   )}
                 >
                   {team}
-                  {selected && <Check size={14} className="text-ucl-gold" />}
                 </button>
               );
             })}
