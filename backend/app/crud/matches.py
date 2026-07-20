@@ -1,6 +1,6 @@
 from datetime import date, datetime, timezone, tzinfo
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import func, select
 from app.models.match import Match, MatchPhase, MatchStatus
 from app.core.time import as_utc, tz_day
 
@@ -53,6 +53,13 @@ class MatchCRUD:
         ]
         started_days = {day for _, day, has_started in rows if has_started}
         return {mid for mid, day, _ in rows if day in started_days}
+
+    async def season_started(self, db: AsyncSession) -> bool:
+        """True si el primer partido de la temporada ya arrancó (min kickoff ≤ ahora).
+        Cierre del Top 8: se predicen las posiciones de la fase de liga, así que se
+        fija antes de que empiece. Una sola consulta agregada."""
+        first = (await db.execute(select(func.min(Match.match_date)))).scalar()
+        return first is not None and as_utc(first) <= datetime.now(timezone.utc)
 
 
 match_crud = MatchCRUD()

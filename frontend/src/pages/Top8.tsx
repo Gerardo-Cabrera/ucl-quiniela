@@ -10,7 +10,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { GripVertical, Search, Check } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { useMyTop8, useSaveTop8, useTeamsConfig } from "@/hooks";
+import { useMyTop8, useSaveTop8, useTeamsConfig, useMatches } from "@/hooks";
 import { Spinner, PointsChip } from "@/components/ui";
 import { clsx } from "clsx";
 
@@ -52,24 +52,31 @@ export default function Top8Page() {
   const { data: savedPicks, isLoading } = useMyTop8();
   const { mutate: save, isPending, isSuccess, reset } = useSaveTop8();
   const { data: teamsConfig } = useTeamsConfig();
+  const { data: matches } = useMatches();
   const uclTeams = teamsConfig?.ucl_teams ?? [];
 
   const [picks, setPicks]   = useState<PickItem[]>([]);
   const [search, setSearch] = useState("");
-  const [locked, setLocked] = useState(false);
 
   const sensors = useSensors(useSensor(PointerSensor));
 
   useEffect(() => {
     if (savedPicks?.length) {
       setPicks(
-        savedPicks
+        // Copia antes de ordenar: .sort() muta en sitio y savedPicks es el array
+        // cacheado por react-query (no se debe mutar).
+        [...savedPicks]
           .sort((a, b) => a.position - b.position)
           .map((p) => ({ id: p.team_name, team_name: p.team_name }))
       );
-      setLocked(savedPicks.some((p) => p.is_calculated));
     }
   }, [savedPicks]);
+
+  // El Top 8 se fija al arrancar la temporada (primer partido) o tras calcularlo;
+  // antes de eso es editable. El backend aplica la misma regla al guardar.
+  const calculated    = savedPicks?.some((p) => p.is_calculated) ?? false;
+  const seasonStarted = (matches ?? []).some((m) => Date.parse(m.match_date) <= Date.now());
+  const locked        = calculated || seasonStarted;
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
@@ -196,7 +203,7 @@ export default function Top8Page() {
 
           {locked && (
             <div className="mt-4 bg-ucl-gold/10 border border-ucl-gold/20 rounded-lg px-4 py-3 text-sm text-ucl-gold/80">
-              {t("top8.locked")}
+              {calculated ? t("top8.locked") : t("top8.lockedSeason")}
             </div>
           )}
         </div>
@@ -217,24 +224,23 @@ export default function Top8Page() {
           </div>
 
           <div className="space-y-1.5 max-h-[420px] overflow-y-auto pr-1">
+            {/* Los equipos ya elegidos salen de `filtered` (arriba), así que aquí
+                solo aparecen los disponibles: al seleccionar uno, desaparece. */}
             {filtered.map((team) => {
-              const selected = !!picks.find((p) => p.team_name === team);
+              const full = picks.length >= 8 || locked;   // 8 elegidos o Top 8 bloqueado
               return (
                 <button
                   key={team}
                   onClick={() => addTeam(team)}
-                  disabled={picks.length >= 8 || locked || selected}
+                  disabled={full}
                   className={clsx(
-                    "w-full flex items-center justify-between px-4 py-2.5 rounded-lg text-sm text-left transition-all duration-150",
-                    selected
-                      ? "bg-ucl-gold/10 text-ucl-gold/60 cursor-default"
-                      : picks.length >= 8 || locked
+                    "w-full px-4 py-2.5 rounded-lg text-sm text-left transition-all duration-150",
+                    full
                       ? "opacity-30 cursor-not-allowed text-ucl-silver"
                       : "hover:bg-ucl-blue/30 hover:text-ucl-white text-ucl-silver"
                   )}
                 >
                   {team}
-                  {selected && <Check size={14} className="text-ucl-gold" />}
                 </button>
               );
             })}

@@ -4,7 +4,7 @@ from app.database import get_db
 from app.models.user import User
 from app.schemas import Top8PicksCreate, Top8PickOut, Top8CalculateRequest
 from app.core.deps import get_current_user, get_admin_user
-from app.crud import top8_crud, team_crud
+from app.crud import top8_crud, team_crud, match_crud
 from app.config import settings
 
 router = APIRouter(prefix="/top8", tags=["Top 8"])
@@ -48,6 +48,13 @@ async def save_top8(
         raise HTTPException(status_code=400, detail="Las posiciones deben ser del 1 al 8 sin repetir.")
 
     await _validate_teams(db, [p.team_name for p in data.picks])
+
+    # El Top 8 se fija antes de que arranque la temporada (predice la fase de liga).
+    if await match_crud.season_started(db):
+        raise HTTPException(
+            status_code=400,
+            detail="El Top 8 solo puede definirse antes del primer partido de la temporada.",
+        )
 
     if await top8_crud.has_calculated_picks(db, current_user.id):
         raise HTTPException(
