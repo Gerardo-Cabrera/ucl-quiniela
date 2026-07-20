@@ -7,13 +7,14 @@ import { apiErrorMessage } from "@/lib/apiError";
 import { Spinner } from "@/components/ui";
 
 /** Perfil del usuario logueado. Un ÚNICO botón "Guardar" aplica lo que el usuario
- *  haya tocado: el alias (si lo cambió/agregó/quitó) y/o la contraseña (si llenó
- *  esos campos). Los campos de contraseña vacíos = no se cambia. */
+ *  haya tocado: el nombre de equipo y/o el alias (si los cambió) y/o la contraseña
+ *  (si llenó esos campos). Los campos de contraseña vacíos = no se cambia. */
 export default function ProfilePage() {
   const { t } = useTranslation();
-  const { user, updateAlias, changePassword } = useAuthStore();
+  const { user, updateProfile, changePassword } = useAuthStore();
   const navigate = useNavigate();
 
+  const [teamName, setTeamName] = useState(user?.team_name ?? "");
   const [alias, setAlias]     = useState(user?.alias ?? "");
   const [current, setCurrent] = useState("");
   const [next, setNext]       = useState("");
@@ -23,11 +24,14 @@ export default function ProfilePage() {
 
   const save = async () => {
     setError("");
+    const normalizedTeam  = teamName.trim();
     const normalizedAlias = alias.trim();
+    const teamChanged  = normalizedTeam  !== (user?.team_name ?? "");
     const aliasChanged = normalizedAlias !== (user?.alias ?? "");
     const wantsPassword = Boolean(current || next || confirm);
 
     // Validaciones locales (el backend re-valida).
+    if (teamChanged && normalizedTeam.length < 3) { setError(t("auth.errTeamShort")); return; }
     if (aliasChanged && normalizedAlias && normalizedAlias.length < 3) {
       setError(t("auth.errAliasShort")); return;
     }
@@ -36,16 +40,19 @@ export default function ProfilePage() {
       if (next !== confirm) { setError(t("auth.changePassword.mismatch")); return; }
       if (next.length < 6) { setError(t("auth.errPasswordShort")); return; }
     }
-    if (!aliasChanged && !wantsPassword) { setError(t("profile.noChanges")); return; }
+    if (!teamChanged && !aliasChanged && !wantsPassword) { setError(t("profile.noChanges")); return; }
 
     setLoading(true);
     try {
-      // Contraseña primero: si falla (actual incorrecta), no toca el alias.
+      // Contraseña primero: si falla (actual incorrecta), no toca el perfil.
       if (wantsPassword) {
         await changePassword(current, next);
         setCurrent(""); setNext(""); setConfirm("");
       }
-      if (aliasChanged) await updateAlias(normalizedAlias || null);
+      // Se envía el estado completo (equipo + alias) para no tocar el que no cambió.
+      if (teamChanged || aliasChanged) {
+        await updateProfile({ team_name: normalizedTeam, alias: normalizedAlias || null });
+      }
       toast.success(t("profile.saved"));
     } catch (err: any) {
       setError(apiErrorMessage(err, t("auth.genericError")));
@@ -76,9 +83,16 @@ export default function ProfilePage() {
       <h1 className="font-display text-4xl text-ucl-gold">{t("profile.title")}</h1>
 
       <div className="card border-ucl-gold/20 p-6 space-y-4">
-        {/* Alias (opcional) */}
-        <h2 className="font-display text-lg">{t("profile.aliasSection")}</h2>
-        {readonly(t("auth.yourTeam"), user?.team_name ?? "")}
+        {/* Datos de la cuenta */}
+        <h2 className="font-display text-lg">{t("profile.account")}</h2>
+        <div>
+          {label(t("auth.yourTeam"))}
+          <input
+            type="text" value={teamName} onChange={(e) => setTeamName(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && save()}
+            placeholder={t("auth.teamPlaceholder")} className="input-base w-full" aria-label={t("auth.yourTeam")}
+          />
+        </div>
         {readonly(t("auth.email"), user?.email ?? "")}
         <div>
           {label(t("auth.alias"))}

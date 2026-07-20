@@ -27,7 +27,7 @@
   },
   "profile": {
     "title": "Perfil",
-    "aliasSection": "Alias",
+    "account": "Datos de la cuenta",
     "hint": "Tu alias es opcional; también sirve para iniciar sesión.",
     "save": "Guardar",
     "saved": "Cambios guardados.",
