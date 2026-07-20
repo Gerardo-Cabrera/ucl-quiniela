@@ -293,6 +293,31 @@ async def test_update_alias_conflict(auth_client: AsyncClient):
 
 
 @pytest.mark.asyncio
+async def test_update_team_name_success(auth_client: AsyncClient):
+    """Se puede cambiar el nombre de equipo y luego iniciar sesión con él."""
+    resp = await auth_client.patch("/api/auth/me", json={"team_name": "Nuevo FC"})
+    assert resp.status_code == 200
+    assert resp.json()["team_name"] == "Nuevo FC"
+    assert (await auth_client.post("/api/auth/login", json={
+        "identifier": "Nuevo FC", "password": "testpass123"})).status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_update_team_name_conflict(auth_client: AsyncClient):
+    """No se puede tomar un nombre de equipo que ya usa otro usuario."""
+    await auth_client.post("/api/auth/register", json={
+        "team_name": "Rival FC", "email": "rival@test.com", "password": "pass1234"})
+    resp = await auth_client.patch("/api/auth/me", json={"team_name": "Rival FC"})
+    assert resp.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_update_team_name_too_short(auth_client: AsyncClient):
+    resp = await auth_client.patch("/api/auth/me", json={"team_name": "ab"})
+    assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
 async def test_update_profile_requires_auth(client: AsyncClient):
     assert (await client.patch("/api/auth/me", json={"alias": "X"})).status_code == 401
 

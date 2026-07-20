@@ -7,13 +7,14 @@ import { apiErrorMessage } from "@/lib/apiError";
 import { Spinner } from "@/components/ui";
 
 /** Perfil del usuario logueado. Un ÚNICO botón "Guardar" aplica lo que el usuario
- *  haya tocado: el alias (si lo cambió/agregó/quitó) y/o la contraseña (si llenó
- *  esos campos). Los campos de contraseña vacíos = no se cambia. */
+ *  haya tocado: el nombre de equipo y/o el alias (si los cambió) y/o la contraseña
+ *  (si llenó esos campos). Los campos de contraseña vacíos = no se cambia. */
 export default function ProfilePage() {
   const { t } = useTranslation();
-  const { user, updateAlias, changePassword } = useAuthStore();
+  const { user, updateProfile, changePassword } = useAuthStore();
   const navigate = useNavigate();
 
+  const [teamName, setTeamName] = useState(user?.team_name ?? "");
   const [alias, setAlias]     = useState(user?.alias ?? "");
   const [current, setCurrent] = useState("");
   const [next, setNext]       = useState("");
@@ -21,31 +22,34 @@ export default function ProfilePage() {
   const [error, setError]     = useState("");
   const [loading, setLoading] = useState(false);
 
+  // Validez derivada (un solo lugar): el botón se habilita solo si hay al menos un
+  // cambio VÁLIDO. Los hints de cada campo guían el criterio; el backend re-valida.
+  const normalizedTeam  = teamName.trim();
+  const normalizedAlias = alias.trim();
+  const teamChanged   = normalizedTeam  !== (user?.team_name ?? "");
+  const aliasChanged  = normalizedAlias !== (user?.alias ?? "");
+  const wantsPassword = Boolean(current || next || confirm);
+  const passwordMismatch = Boolean(next && confirm && next !== confirm);
+
+  const teamValid     = !teamChanged  || normalizedTeam.length >= 3;
+  const aliasValid    = !aliasChanged || normalizedAlias === "" || normalizedAlias.length >= 3;
+  const passwordValid = !wantsPassword || (current.length > 0 && next.length >= 6 && next === confirm);
+  const canSave = (teamChanged || aliasChanged || wantsPassword) && teamValid && aliasValid && passwordValid;
+
   const save = async () => {
+    if (!canSave || loading) return;   // el botón ya lo refleja; guarda también al pulsar Enter
     setError("");
-    const normalizedAlias = alias.trim();
-    const aliasChanged = normalizedAlias !== (user?.alias ?? "");
-    const wantsPassword = Boolean(current || next || confirm);
-
-    // Validaciones locales (el backend re-valida).
-    if (aliasChanged && normalizedAlias && normalizedAlias.length < 3) {
-      setError(t("auth.errAliasShort")); return;
-    }
-    if (wantsPassword) {
-      if (!current || !next || !confirm) { setError(t("profile.passwordIncomplete")); return; }
-      if (next !== confirm) { setError(t("auth.changePassword.mismatch")); return; }
-      if (next.length < 6) { setError(t("auth.errPasswordShort")); return; }
-    }
-    if (!aliasChanged && !wantsPassword) { setError(t("profile.noChanges")); return; }
-
     setLoading(true);
     try {
-      // Contraseña primero: si falla (actual incorrecta), no toca el alias.
+      // Contraseña primero: si falla (actual incorrecta), no toca el perfil.
       if (wantsPassword) {
         await changePassword(current, next);
         setCurrent(""); setNext(""); setConfirm("");
       }
-      if (aliasChanged) await updateAlias(normalizedAlias || null);
+      // Se envía el estado completo (equipo + alias) para no tocar el que no cambió.
+      if (teamChanged || aliasChanged) {
+        await updateProfile({ team_name: normalizedTeam, alias: normalizedAlias || null });
+      }
       toast.success(t("profile.saved"));
     } catch (err: any) {
       setError(apiErrorMessage(err, t("auth.genericError")));
@@ -76,9 +80,17 @@ export default function ProfilePage() {
       <h1 className="font-display text-4xl text-ucl-gold">{t("profile.title")}</h1>
 
       <div className="card border-ucl-gold/20 p-6 space-y-4">
-        {/* Alias (opcional) */}
-        <h2 className="font-display text-lg">{t("profile.aliasSection")}</h2>
-        {readonly(t("auth.yourTeam"), user?.team_name ?? "")}
+        {/* Datos de la cuenta */}
+        <h2 className="font-display text-lg">{t("profile.account")}</h2>
+        <div>
+          {label(t("auth.yourTeam"))}
+          <input
+            type="text" value={teamName} onChange={(e) => setTeamName(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && save()}
+            placeholder={t("auth.teamPlaceholder")} className="input-base w-full" aria-label={t("auth.yourTeam")}
+          />
+          <p className="text-xs text-ucl-silver/50 mt-1.5">{t("auth.teamHint")}</p>
+        </div>
         {readonly(t("auth.email"), user?.email ?? "")}
         <div>
           {label(t("auth.alias"))}
@@ -87,7 +99,7 @@ export default function ProfilePage() {
             onKeyDown={(e) => e.key === "Enter" && save()}
             placeholder={t("auth.aliasPlaceholder")} className="input-base w-full" aria-label={t("auth.alias")}
           />
-          <p className="text-xs text-ucl-silver/50 mt-1.5">{t("profile.hint")}</p>
+          <p className="text-xs text-ucl-silver/50 mt-1.5">{t("auth.aliasHint")}</p>
         </div>
 
         {/* Contraseña (dejar en blanco si no se cambia) */}
@@ -98,6 +110,10 @@ export default function ProfilePage() {
             {pwField(t("auth.changePassword.new"), next, setNext)}
             {pwField(t("auth.changePassword.confirm"), confirm, setConfirm)}
           </div>
+          <p className="text-xs text-ucl-silver/50 mt-2">{t("profile.passwordHint")}</p>
+          {passwordMismatch && (
+            <p className="text-xs text-red-400 mt-1">{t("auth.changePassword.mismatch")}</p>
+          )}
         </div>
 
         {error && (
@@ -106,7 +122,7 @@ export default function ProfilePage() {
           </div>
         )}
 
-        <button onClick={save} disabled={loading} className="btn-primary w-full flex items-center justify-center gap-2 mt-2">
+        <button onClick={save} disabled={loading || !canSave} className="btn-primary w-full flex items-center justify-center gap-2 mt-2">
           {loading ? <><Spinner size="sm" /> {t("common.loading")}</> : t("profile.save")}
         </button>
       </div>

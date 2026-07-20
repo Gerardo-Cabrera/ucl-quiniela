@@ -23,6 +23,15 @@ def _normalize_alias(v: Optional[str]) -> Optional[str]:
     return v
 
 
+def _normalize_team_name(v: str) -> str:
+    """Regla única del nombre de equipo (registro y perfil): texto libre y
+    obligatorio, mín. 3 caracteres tras recortar espacios."""
+    v = v.strip()
+    if len(v) < 3:
+        raise ValueError("El nombre de equipo debe tener al menos 3 caracteres.")
+    return v
+
+
 class UserCreate(BaseModel):
     # El nombre de equipo es texto libre (mín. 3 caracteres tras recortar espacios).
     team_name: str = Field(max_length=100)
@@ -34,10 +43,7 @@ class UserCreate(BaseModel):
     @field_validator("team_name")
     @classmethod
     def _validate_team_name(cls, v: str) -> str:
-        v = v.strip()
-        if len(v) < 3:
-            raise ValueError("El nombre de equipo debe tener al menos 3 caracteres.")
-        return v
+        return _normalize_team_name(v)
 
     @field_validator("alias")
     @classmethod
@@ -76,9 +82,16 @@ class PasswordReset(BaseModel):
 
 
 class ProfileUpdate(BaseModel):
-    """Edición del perfil del usuario autenticado. El alias es opcional
-    (vacío = quitarlo)."""
+    """Edición del perfil del usuario autenticado: nombre de equipo y/o alias.
+    El equipo (obligatorio) solo se cambia si se envía; el alias es opcional
+    (en blanco = quitarlo)."""
+    team_name: Optional[str] = Field(default=None, max_length=100)
     alias: Optional[str] = Field(default=None, max_length=100)
+
+    @field_validator("team_name")
+    @classmethod
+    def _validate_team_name(cls, v: Optional[str]) -> Optional[str]:
+        return _normalize_team_name(v) if v is not None else None
 
     @field_validator("alias")
     @classmethod

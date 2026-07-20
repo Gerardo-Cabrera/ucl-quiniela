@@ -26,25 +26,20 @@ export default function LoginPage() {
 
   const switchMode = (m: Mode) => { setMode(m); setError(""); setNotice(""); };
 
-  // Validaciones cliente (feedback inmediato); el backend aplica las mismas reglas.
-  const registerError = (): string | null => {
-    if (teamName.trim().length < 3) return t("auth.errTeamShort");
-    if (alias.trim() && alias.trim().length < 3) return t("auth.errAliasShort");
-    if (!EMAIL_RE.test(email)) return t("auth.errEmailInvalid");
-    if (password.length < 6) return t("auth.errPasswordShort");
-    return null;
-  };
-  const resetErrorMsg = (): string | null => {
-    if (!EMAIL_RE.test(email)) return t("auth.errEmailInvalid");
-    if (teamName.trim().length < 3) return t("auth.errTeamShort");
-    if (password.length < 6) return t("auth.errPasswordShort");
-    return null;
-  };
+  // Validez del formulario por modo (las reglas se guían con los hints de cada
+  // campo; el backend re-valida). El botón se habilita solo si el modo es válido.
+  const teamOk  = teamName.trim().length >= 3;
+  const aliasOk = !alias.trim() || alias.trim().length >= 3;
+  const emailOk = EMAIL_RE.test(email);
+  const passOk  = password.length >= 6;
+  const canSubmit =
+    mode === "login"    ? Boolean(identifier && password) :
+    mode === "register" ? teamOk && aliasOk && emailOk && passOk :
+                          emailOk && teamOk && passOk;
 
   const handleSubmit = async () => {
+    if (!canSubmit || loading) return;   // el botón ya lo refleja; cubre también Enter
     setError(""); setNotice("");
-    if (mode === "register") { const invalid = registerError(); if (invalid) { setError(invalid); return; } }
-    if (mode === "reset")    { const invalid = resetErrorMsg(); if (invalid) { setError(invalid); return; } }
     setLoading(true);
     try {
       if (mode === "login") {
@@ -66,7 +61,8 @@ export default function LoginPage() {
 
   const field = (
     label: string, value: string, onChange: (v: string) => void,
-    { type = "text", placeholder = "", aria = label }: { type?: string; placeholder?: string; aria?: string } = {},
+    { type = "text", placeholder = "", aria = label, hint = "" }:
+      { type?: string; placeholder?: string; aria?: string; hint?: string } = {},
   ) => (
     <div>
       <label className="block text-xs text-ucl-silver/70 mb-1.5 font-mono uppercase">{label}</label>
@@ -79,6 +75,7 @@ export default function LoginPage() {
         className="input-base w-full"
         aria-label={aria}
       />
+      {hint && <p className="text-xs text-ucl-silver/50 mt-1.5">{hint}</p>}
     </div>
   );
 
@@ -140,9 +137,9 @@ export default function LoginPage() {
 
             {mode === "register" && (
               <>
-                {field(t("auth.yourTeam"), teamName, setTeamName, { placeholder: t("auth.teamPlaceholder") })}
-                {field(t("auth.alias"), alias, setAlias, { placeholder: t("auth.aliasPlaceholder") })}
-                {field(t("auth.email"), email, setEmail, { type: "email", placeholder: t("auth.emailPlaceholder"), aria: t("auth.emailAria") })}
+                {field(t("auth.yourTeam"), teamName, setTeamName, { placeholder: t("auth.teamPlaceholder"), hint: t("auth.teamHint") })}
+                {field(t("auth.alias"), alias, setAlias, { placeholder: t("auth.aliasPlaceholder"), hint: t("auth.aliasHint") })}
+                {field(t("auth.email"), email, setEmail, { type: "email", placeholder: t("auth.emailPlaceholder"), aria: t("auth.emailAria"), hint: t("auth.emailHint") })}
               </>
             )}
 
@@ -155,7 +152,9 @@ export default function LoginPage() {
 
             {field(
               mode === "reset" ? t("auth.changePassword.new") : t("auth.password"),
-              password, setPassword, { type: "password", placeholder: "••••••••", aria: t("auth.password") },
+              password, setPassword,
+              { type: "password", placeholder: "••••••••", aria: t("auth.password"),
+                hint: mode === "login" ? "" : t("auth.passwordHint") },
             )}
 
             {error && (
@@ -171,7 +170,7 @@ export default function LoginPage() {
 
             <button
               onClick={handleSubmit}
-              disabled={loading}
+              disabled={loading || !canSubmit}
               className="btn-primary w-full flex items-center justify-center gap-2 mt-2"
             >
               {loading ? <><Spinner size="sm" /> {t("common.loading")}</> :

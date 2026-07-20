@@ -74,8 +74,14 @@ async def update_profile(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Actualiza el perfil del usuario autenticado. Por ahora solo el alias
-    (opcional; vacío lo quita). Rechaza el alias si ya lo usa otro usuario."""
+    """Actualiza el perfil del usuario autenticado: nombre de equipo y/o alias.
+    El equipo solo se cambia si se envía (obligatorio, no se puede vaciar); el alias
+    en blanco lo quita. Rechaza (409) si el equipo o el alias ya lo usa otro usuario."""
+    if data.team_name is not None:
+        owner = await user_crud.get_by_team_name(db, data.team_name)
+        if owner and owner.id != current_user.id:
+            raise HTTPException(status_code=409, detail="Ese nombre de equipo ya está en uso.")
+        current_user.team_name = data.team_name
     if data.alias is not None:
         owner = await user_crud.get_by_alias(db, data.alias)
         if owner and owner.id != current_user.id:
