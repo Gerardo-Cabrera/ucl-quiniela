@@ -5,13 +5,19 @@ name: Keep Render awake
 # mantiene despierta con un GET /health. El ping DEBE venir de fuera: una instancia
 # dormida no se despierta sola. Repo público → los minutos de Actions son gratis.
 #
+# LIMITACIÓN IMPORTANTE: los cron de GitHub Actions se retrasan/omiten mucho bajo
+# carga (se han observado intervalos reales de 60-230 min pese al */10), así que
+# NO garantizan mantener despierto un servicio con timeout de 15 min. Para
+# continuidad real usa un monitor externo (cron-job.org / UptimeRobot) apuntando a
+# <tu-backend>/health cada ~5 min. Este cron queda como respaldo best-effort.
+#
 # Activación: define la variable de repo KEEPALIVE_URL
 #   (Settings → Secrets and variables → Actions → Variables → New variable)
 #   con la URL del health del backend, p. ej. https://tu-api.onrender.com/health
 # Si no está definida, el job se OMITE (no molesta a quien no use Render).
 on:
   schedule:
-    - cron: "*/14 * * * *"   # cada 14 min (por debajo del timeout de 15 min de Render)
+    - cron: "*/10 * * * *"   # cada 10 min nominal (más intentos; GitHub los retrasa igual)
   workflow_dispatch:          # permite dispararlo a mano
 
 permissions:
