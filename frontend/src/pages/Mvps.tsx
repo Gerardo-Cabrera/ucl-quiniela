@@ -21,16 +21,26 @@ export default function Mvps() {
   // Solo jornadas con MVP (partidos ya puntuados), de la más reciente a la más antigua.
   const mvpDays = [...(data?.days ?? [])].reverse().filter((d) => d.mvps.length > 0);
 
+  // Encabezado
+  const header = (
+    <div>
+      <h1 className="font-display text-4xl text-ucl-gold">{t("mvps.title")}</h1>
+      <p className="text-ucl-silver/60 text-sm mt-1">{t("mvps.subtitle")}</p>
+    </div>
+  );
+
   if (!mvpDays.length) {
-    return <EmptyState icon="👑" title={t("mvps.emptyTitle")} description={t("mvps.emptyDescription")} />;
+    return (
+      <div className="space-y-6 animate-in">
+        {header}
+        <EmptyState icon="👑" title={t("mvps.emptyTitle")} description={t("mvps.emptyDescription")} />
+      </div>
+    );
   }
 
   return (
     <div className="space-y-6 animate-in">
-      <div>
-        <h1 className="font-display text-4xl text-ucl-gold">{t("mvps.title")}</h1>
-        <p className="text-ucl-silver/60 text-sm mt-1">{t("mvps.subtitle")}</p>
-      </div>
+      {header}
 
       {/* MVP de cada jornada */}
       <Card>

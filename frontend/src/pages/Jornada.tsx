@@ -19,8 +19,21 @@ export default function Jornada() {
     );
   }
 
+  // Encabezado
+  const header = (
+    <div>
+      <h1 className="font-display text-4xl text-ucl-gold">{t("jornada.title")}</h1>
+      <p className="text-ucl-silver/60 text-sm mt-1">{t("jornada.subtitle")}</p>
+    </div>
+  );
+
   if (!data?.days.length) {
-    return <EmptyState icon="📅" title={t("jornada.emptyTitle")} description={t("jornada.emptyDescription")} />;
+    return (
+      <div className="space-y-6 animate-in">
+        {header}
+        <EmptyState icon="📅" title={t("jornada.emptyTitle")} description={t("jornada.emptyDescription")} />
+      </div>
+    );
   }
 
   // El backend envía los días ascendentes; se muestran del más reciente al más antiguo.
@@ -28,10 +41,7 @@ export default function Jornada() {
 
   return (
     <div className="space-y-6 animate-in">
-      <div>
-        <h1 className="font-display text-4xl text-ucl-gold">{t("jornada.title")}</h1>
-        <p className="text-ucl-silver/60 text-sm mt-1">{t("jornada.subtitle")}</p>
-      </div>
+      {header}
 
       {days.map((day) => (
         <Card key={day.date}>

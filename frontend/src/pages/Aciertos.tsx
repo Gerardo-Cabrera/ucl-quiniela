@@ -53,16 +53,26 @@ export default function Aciertos() {
       data.first_goal_matches.length ||
       data.exact_matches.length);
 
+  // Encabezado
+  const header = (
+    <div>
+      <h1 className="font-display text-4xl text-ucl-gold">{t("aciertos.title")}</h1>
+      <p className="text-ucl-silver/60 text-sm mt-1">{t("aciertos.subtitle")}</p>
+    </div>
+  );
+
   if (!hasData) {
-    return <EmptyState icon="🎯" title={t("aciertos.emptyTitle")} description={t("aciertos.emptyDescription")} />;
+    return (
+      <div className="space-y-6 animate-in">
+        {header}
+        <EmptyState icon="🎯" title={t("aciertos.emptyTitle")} description={t("aciertos.emptyDescription")} />
+      </div>
+    );
   }
 
   return (
     <div className="space-y-6 animate-in">
-      <div>
-        <h1 className="font-display text-4xl text-ucl-gold">{t("aciertos.title")}</h1>
-        <p className="text-ucl-silver/60 text-sm mt-1">{t("aciertos.subtitle")}</p>
-      </div>
+      {header}
 
       <div className="grid gap-6 md:grid-cols-2">
         <RankingCard
