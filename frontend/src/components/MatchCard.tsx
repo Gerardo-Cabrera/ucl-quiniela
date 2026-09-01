@@ -38,8 +38,9 @@ export function MatchCard({ match, prediction, onPredict }: MatchCardProps) {
         <StatusDot status={match.status} />
       </div>
 
-      {/* Teams + Score */}
-      <div className="flex items-center gap-3">
+      {/* Teams + Score. mb-4 = gap mínimo fijo hasta el pie; el pie usa mt-auto para
+          absorber el espacio extra de la fila y anclarse abajo sin quedar pegado. */}
+      <div className="flex items-center gap-3 mb-4">
         {/* Home */}
         <div className="flex-1 flex flex-col items-center gap-2">
           {match.home_team_logo ? (
