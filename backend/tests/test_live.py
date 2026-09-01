@@ -189,9 +189,13 @@ async def test_sync_teams_skipped_without_matches(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_sync_teams_keeps_only_league_teams(monkeypatch):
-    """Solo se persisten los clubes cuyos ids aparecen en los partidos de la liga; los
-    de la fase previa que devuelve /teams se descartan."""
+    """Solo persisten los clubes de la fase de liga (ids en los partidos): los de
+    /teams fuera de ese set se descartan, y los guardados por corridas antiguas se
+    eliminan (reconciliación tras un sync con éxito)."""
     await _add_match(home_team_api_id=999, away_team_api_id=888)
+    async with TestSessionLocal() as session:
+        session.add(Team(api_team_id=777, name="Old Qualifier"))  # inelegible, de una corrida vieja
+        await session.commit()
 
     async def fake_fetch_teams():
         return [
@@ -205,4 +209,5 @@ async def test_sync_teams_keeps_only_league_teams(monkeypatch):
     async with TestSessionLocal() as session:
         names = {r[0] for r in (await session.execute(select(Team.name))).all()}
     assert "League FC" in names          # id 999 juega en la liga → se guarda
-    assert "Qualifier FC" not in names   # id 555 (fase previa) → descartado
+    assert "Qualifier FC" not in names   # id 555 (de /teams, fase previa) → descartado
+    assert "Old Qualifier" not in names  # id 777 (corrida vieja) → eliminado por la poda

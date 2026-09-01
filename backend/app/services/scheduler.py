@@ -179,10 +179,18 @@ async def _do_sync_teams():
     # /teams?league&season incluye también los clubes de la FASE PREVIA (clasificación);
     # se descartan filtrando por los ids que aparecen en los partidos de la liga (los 36).
     parsed = [ucl_api.parse_team(t) for t in teams if (t.get("team") or {}).get("id") in team_ids]
+    if not parsed:
+        logger.warning("Sync de clubes: /teams no devolvió clubes de la liga; sin cambios.")
+        return
+    keep = {p["api_team_id"] for p in parsed}
     async with AsyncSessionLocal() as db:
         count = await team_crud.upsert_many(db, parsed)
+        # Reconcilia en la MISMA transacción: elimina clubes ya no elegibles (p. ej. de
+        # fase previa que dejaron corridas anteriores), para que el selector del Top 8
+        # exponga exactamente los clubes de la fase de liga.
+        removed = await team_crud.delete_except(db, keep)
         await db.commit()
-    logger.info("Synced %d teams.", count)
+    logger.info("Synced %d teams (%d obsoletos eliminados).", count, removed)
 
 
 async def sync_teams():
