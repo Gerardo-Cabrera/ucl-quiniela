@@ -188,6 +188,15 @@ export const useMyTop8 = () =>
     queryFn:  top8Api.getMine,
   });
 
+// Top 8 de otro participante, revelado tras el primer partido de la temporada
+// (el backend devuelve vacío antes). enabled solo con usuario seleccionado.
+export const useUserTop8 = (userId: number | null) =>
+  useQuery({
+    queryKey: ["top8", "user", userId],
+    queryFn:  () => top8Api.getForUser(userId!),
+    enabled:  userId != null,
+  });
+
 export const useSaveTop8 = () => {
   const qc = useQueryClient();
   const onError = useErrorToast();

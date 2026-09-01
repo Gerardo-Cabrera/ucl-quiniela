@@ -502,6 +502,26 @@ async def test_top8_calculate_requires_admin(auth_client: AsyncClient):
 
 
 @pytest.mark.asyncio
+async def test_top8_reveal_only_after_season_start(auth_client: AsyncClient):
+    """El Top 8 ajeno se revela solo cuando arrancó el primer partido de la temporada.
+    (auth_client es el usuario id 1 con BD fresca; se revela su propio Top 8.)"""
+    await auth_client.post("/api/top8/", json=_picks_payload(VALID_TOP8))
+
+    # Sin partidos (temporada no empezada) → oculto (vacío).
+    assert (await auth_client.get("/api/top8/user/1")).json() == []
+
+    # Con el primer partido ya en juego → se revela.
+    async with TestSessionLocal() as session:
+        session.add(Match(
+            api_fixture_id=7001, home_team="Real Madrid", away_team="Barcelona",
+            phase=MatchPhase.LEAGUE, status=MatchStatus.LIVE,
+            match_date=datetime.now(timezone.utc) - timedelta(minutes=5),
+        ))
+        await session.commit()
+    assert len((await auth_client.get("/api/top8/user/1")).json()) == 8
+
+
+@pytest.mark.asyncio
 async def test_top8_calculate_scores_picks(admin_client: AsyncClient):
     # Guardar picks: posiciones 1-7 correctas, octavo equipo fuera del top8 real.
     my_teams = VALID_TOP8[:7] + ["Juventus"]

@@ -124,9 +124,11 @@
     "delete": "Eliminar pronóstico"
   },
   "userPredictions": {
-    "subtitle": "Pronósticos revelados de las jornadas ya iniciadas",
-    "emptyTitle": "Aún no hay pronósticos visibles",
-    "emptyDescription": "Los pronósticos de este participante se revelan cuando arranca el primer partido de cada jornada."
+    "subtitle": "Pronósticos revelados de este participante",
+    "top8Title": "Top 8",
+    "predictionsTitle": "Pronósticos",
+    "emptyTitle": "Aún no hay nada visible",
+    "emptyDescription": "El Top 8 se revela al arrancar la temporada y los pronósticos de cada jornada al empezar su primer partido."
   },
   "predictionModal": {
     "titleEdit": "Editar Pronóstico",

@@ -33,6 +33,20 @@ async def get_my_top8(
     return await top8_crud.get_by_user(db, current_user.id)
 
 
+@router.get("/user/{user_id}", response_model=list[Top8PickOut])
+async def get_user_top8(
+    user_id: int,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    """Top 8 de otro participante, revelado una vez que **arranca el primer partido
+    de la temporada** (mismo cierre que el propio Top 8: para entonces ya no se puede
+    cambiar). Antes de eso devuelve vacío, para no exponer la apuesta ajena."""
+    if not await match_crud.season_started(db):
+        return []
+    return await top8_crud.get_by_user(db, user_id)
+
+
 @router.post("/", response_model=list[Top8PickOut], status_code=201)
 async def save_top8(
     data: Top8PicksCreate,
