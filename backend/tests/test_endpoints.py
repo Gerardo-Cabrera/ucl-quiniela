@@ -522,6 +522,14 @@ async def test_top8_reveal_only_after_season_start(auth_client: AsyncClient):
 
 
 @pytest.mark.asyncio
+async def test_top8_all_endpoint_removed(auth_client: AsyncClient):
+    """`/top8/all` se eliminó: exponía el Top 8 de todos sin el gate de revelado,
+    sorteando la privacidad de `/top8/user/{id}`. Se comparan de a uno (ya protegido)."""
+    await auth_client.post("/api/top8/", json=_picks_payload(VALID_TOP8))
+    assert (await auth_client.get("/api/top8/all")).status_code == 404
+
+
+@pytest.mark.asyncio
 async def test_top8_calculate_scores_picks(admin_client: AsyncClient):
     # Guardar picks: posiciones 1-7 correctas, octavo equipo fuera del top8 real.
     my_teams = VALID_TOP8[:7] + ["Juventus"]

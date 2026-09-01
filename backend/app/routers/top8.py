@@ -80,15 +80,6 @@ async def save_top8(
     return await top8_crud.replace_picks(db, current_user.id, picks_data)
 
 
-@router.get("/all", response_model=dict)
-async def get_all_top8(
-    db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_user),
-):
-    """Retorna todos los Top 8 de todos los participantes (para comparar)."""
-    return await top8_crud.get_all_with_users(db)
-
-
 @router.post("/calculate", summary="Admin: Calcular puntos Top 8")
 async def calculate_top8(
     data: Top8CalculateRequest,
