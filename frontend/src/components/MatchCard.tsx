@@ -23,7 +23,9 @@ export function MatchCard({ match, prediction, onPredict }: MatchCardProps) {
   return (
     <div
       className={clsx(
-        "card p-4 transition-all duration-200 group",
+        // h-full + flex-col: la grilla estira las tarjetas a igual altura y el pie
+        // (botón) se ancla abajo con mt-auto → los botones quedan siempre alineados.
+        "card p-4 transition-all duration-200 group h-full flex flex-col",
         prediction && "border-ucl-gold/20",
         match.status === "live" && "border-red-500/30 shadow-[0_0_20px_rgba(239,68,68,0.08)]"
       )}
@@ -36,8 +38,9 @@ export function MatchCard({ match, prediction, onPredict }: MatchCardProps) {
         <StatusDot status={match.status} />
       </div>
 
-      {/* Teams + Score */}
-      <div className="flex items-center gap-3">
+      {/* Teams + Score. mb-4 = gap mínimo fijo hasta el pie; el pie usa mt-auto para
+          absorber el espacio extra de la fila y anclarse abajo sin quedar pegado. */}
+      <div className="flex items-center gap-3 mb-4">
         {/* Home */}
         <div className="flex-1 flex flex-col items-center gap-2">
           {match.home_team_logo ? (
@@ -86,7 +89,7 @@ export function MatchCard({ match, prediction, onPredict }: MatchCardProps) {
 
       {/* Prediction row */}
       {prediction ? (
-        <div className="mt-4 pt-3 border-t border-ucl-blue/30 flex items-center justify-between">
+        <div className="mt-auto pt-3 border-t border-ucl-blue/30 flex items-center justify-between">
           <div className="flex items-center gap-2 text-sm">
             <span className="text-ucl-silver/60 text-xs">{t("matchCard.yourPrediction")}</span>
             <span className={clsx("font-mono font-bold", hasExact ? "text-ucl-gold" : "text-ucl-white")}>
@@ -108,7 +111,7 @@ export function MatchCard({ match, prediction, onPredict }: MatchCardProps) {
           </div>
         </div>
       ) : canPredict && onPredict ? (
-        <div className="mt-4 pt-3 border-t border-ucl-blue/30">
+        <div className="mt-auto pt-3 border-t border-ucl-blue/30">
           <button
             onClick={() => onPredict(match)}
             className="btn-primary w-full text-sm py-2"
