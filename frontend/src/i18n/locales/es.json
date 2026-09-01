@@ -18,7 +18,7 @@
     "table": "Tabla",
     "matches": "Partidos",
     "predictions": "Pronósticos",
-    "top8": "Top 8",
+    "tournament": "Torneo",
     "aciertos": "Aciertos",
     "jornada": "Jornada",
     "mvps": "MVPs",
@@ -163,6 +163,8 @@
     "searchPlaceholder": "Buscar equipo..."
   },
   "tournament": {
+    "pageTitle": "Predicciones del torneo",
+    "pageSubtitle": "Tu Top 8, tu MVP y tu máximo goleador del torneo",
     "title": "MVP y máximo goleador",
     "subtitle": "Elige al MVP y al máximo goleador del torneo (5 pts por acierto). Editable hasta que arranca la eliminatoria.",
     "pts": "PTS TORNEO",

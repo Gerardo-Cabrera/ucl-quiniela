@@ -227,9 +227,16 @@ export default function Top8Page() {
 
   return (
     <div className="space-y-6 animate-in">
+      {/* Encabezado de la página: agrupa Top 8 + MVP/máximo goleador del torneo */}
+      <div>
+        <h1 className="font-display text-4xl text-ucl-gold">{t("tournament.pageTitle")}</h1>
+        <p className="text-ucl-silver/60 text-sm mt-1">{t("tournament.pageSubtitle")}</p>
+      </div>
+
+      {/* Sección Top 8 */}
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="font-display text-4xl text-ucl-gold">{t("top8.title")}</h1>
+          <h2 className="font-display text-2xl text-ucl-gold">{t("top8.title")}</h2>
           <p className="text-ucl-silver/60 text-sm mt-1">
             {t("top8.subtitle")}
           </p>
