@@ -34,7 +34,7 @@
     "back": "Volver"
   },
   "auth": {
-    "tabLogin": "Entrar",
+    "tabLogin": "Ingresar",
     "tabRegister": "Registrarse",
     "yourTeam": "Nombre de tu equipo",
     "teamPlaceholder": "Ej: Real Madrid C.F",
@@ -46,7 +46,7 @@
     "emailAria": "Correo electrónico",
     "emailPlaceholder": "tu@email.com",
     "password": "Contraseña",
-    "submitLogin": "Entrar a la Quiniela",
+    "submitLogin": "Ingresar a la Quiniela",
     "submitRegister": "Crear cuenta",
     "genericError": "Ocurrió un error. Intenta de nuevo.",
     "sessionExpired": "Sesión cerrada por inactividad.",
@@ -55,10 +55,10 @@
     "emailHint": "Introduce un correo válido; lo usarás para recuperar tu contraseña.",
     "passwordHint": "Mínimo 6 caracteres.",
     "forgotPassword": "¿Olvidaste tu contraseña?",
-    "backToLogin": "Volver a entrar",
+    "backToLogin": "Volver a la pestaña ingresar",
     "resetHint": "Confirma tu email y el nombre de tu equipo, y define una nueva contraseña.",
     "resetSubmit": "Restablecer contraseña",
-    "resetSuccess": "Contraseña restablecida. Ya puedes entrar.",
+    "resetSuccess": "Contraseña restablecida. Ya puedes ingresar al sistema.",
     "registerSuccess": "¡Cuenta creada con éxito! Ya puedes iniciar sesión.",
     "changePassword": {
       "title": "Cambiar contraseña",
