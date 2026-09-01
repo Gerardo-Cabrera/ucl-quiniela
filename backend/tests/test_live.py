@@ -188,17 +188,26 @@ async def test_sync_teams_skipped_without_matches(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_sync_teams_runs_with_matches(monkeypatch):
-    """Con al menos un partido oficial en BD, el sync de clubes sí persiste."""
-    await _add_match()
+async def test_sync_teams_keeps_only_league_teams(monkeypatch):
+    """Solo persisten los clubes de la fase de liga (ids en los partidos): los de
+    /teams fuera de ese set se descartan, y los guardados por corridas antiguas se
+    eliminan (reconciliación tras un sync con éxito)."""
+    await _add_match(home_team_api_id=999, away_team_api_id=888)
+    async with TestSessionLocal() as session:
+        session.add(Team(api_team_id=777, name="Old Qualifier"))  # inelegible, de una corrida vieja
+        await session.commit()
 
     async def fake_fetch_teams():
-        return [{"team": {"id": 999, "name": "Test United", "code": "TU",
-                          "country": "England", "logo": "x.png"}}]
+        return [
+            {"team": {"id": 999, "name": "League FC", "code": "LFC", "country": "England", "logo": "x.png"}},
+            {"team": {"id": 555, "name": "Qualifier FC", "code": "QFC", "country": "Malta", "logo": "y.png"}},
+        ]
 
     monkeypatch.setattr(ucl_api, "fetch_teams", fake_fetch_teams)
     await scheduler_module._do_sync_teams()
 
     async with TestSessionLocal() as session:
         names = {r[0] for r in (await session.execute(select(Team.name))).all()}
-    assert "Test United" in names
+    assert "League FC" in names          # id 999 juega en la liga → se guarda
+    assert "Qualifier FC" not in names   # id 555 (de /teams, fase previa) → descartado
+    assert "Old Qualifier" not in names  # id 777 (corrida vieja) → eliminado por la poda

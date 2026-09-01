@@ -151,21 +151,46 @@ async def sync_ucl_fixtures():
     await _retry(_do_sync_fixtures, "sync_ucl_fixtures")
 
 
-async def _do_sync_teams():
-    # Los clubes solo se guardan cuando la competición ya existe en BD (fase de liga
-    # en adelante): sin partidos oficiales el selector del Top 8 queda vacío y no se
-    # gasta cuota de la API durante la fase previa.
+async def _league_team_ids() -> set[int]:
+    """IDs de equipo (API-Football) presentes en los partidos guardados = los clubes
+    de la FASE DE LIGA. Fuente única para el sync de clubes y de plantillas: sin
+    partidos oficiales en BD el set es vacío (nada que sincronizar)."""
     async with AsyncSessionLocal() as db:
-        has_matches = (await db.execute(select(Match.id).limit(1))).first() is not None
-    if not has_matches:
+        rows = (await db.execute(
+            select(Match.home_team_api_id, Match.away_team_api_id)
+        )).all()
+    ids: set[int] = set()
+    for home, away in rows:
+        if home is not None:
+            ids.add(home)
+        if away is not None:
+            ids.add(away)
+    return ids
+
+
+async def _do_sync_teams():
+    # Solo los clubes de la fase de liga (los presentes en sus partidos). Sin partidos
+    # oficiales en BD no hay nada que sincronizar y no se gasta cuota durante la fase previa.
+    team_ids = await _league_team_ids()
+    if not team_ids:
         logger.info("Sync de clubes omitido: aún no hay partidos oficiales en BD.")
         return
     teams = await ucl_api.fetch_teams()
-    parsed = [ucl_api.parse_team(t) for t in teams]
+    # /teams?league&season incluye también los clubes de la FASE PREVIA (clasificación);
+    # se descartan filtrando por los ids que aparecen en los partidos de la liga (los 36).
+    parsed = [ucl_api.parse_team(t) for t in teams if (t.get("team") or {}).get("id") in team_ids]
+    if not parsed:
+        logger.warning("Sync de clubes: /teams no devolvió clubes de la liga; sin cambios.")
+        return
+    keep = {p["api_team_id"] for p in parsed}
     async with AsyncSessionLocal() as db:
         count = await team_crud.upsert_many(db, parsed)
+        # Reconcilia en la MISMA transacción: elimina clubes ya no elegibles (p. ej. de
+        # fase previa que dejaron corridas anteriores), para que el selector del Top 8
+        # exponga exactamente los clubes de la fase de liga.
+        removed = await team_crud.delete_except(db, keep)
         await db.commit()
-    logger.info("Synced %d teams.", count)
+    logger.info("Synced %d teams (%d obsoletos eliminados).", count, removed)
 
 
 async def sync_teams():
@@ -176,18 +201,9 @@ async def sync_teams():
 
 
 async def _do_sync_players():
-    # Las plantillas se traen por equipo. Los ids de equipo salen de los partidos
-    # ya sincronizados (no hay tabla de equipos). Una petición /players/squads por
-    # equipo, acotada con un semáforo para no saturar la API.
-    async with AsyncSessionLocal() as db:
-        home = await db.execute(
-            select(Match.home_team_api_id).where(Match.home_team_api_id.is_not(None))
-        )
-        away = await db.execute(
-            select(Match.away_team_api_id).where(Match.away_team_api_id.is_not(None))
-        )
-        team_ids = {r[0] for r in home.all()} | {r[0] for r in away.all()}
-
+    # Las plantillas se traen por equipo (fase de liga): una petición /players/squads
+    # por equipo, acotada con un semáforo para no saturar la API.
+    team_ids = await _league_team_ids()
     if not team_ids:
         logger.info("Synced 0 players (no hay equipos con id en BD todavía).")
         return
