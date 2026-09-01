@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import { X, Minus, Plus } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { Match, Prediction } from "@/types";
@@ -53,7 +54,9 @@ export function PredictionModal({ match, prediction, onClose }: Props) {
     }, { onSuccess: () => setTimeout(onClose, 800) });
   };
 
-  return (
+  // Portal al body: escapa del ancestro con transform (`.animate-in`), que rompería
+  // el `fixed` y provocaría un scroll en vez de mostrar el modal centrado.
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       {/* Backdrop */}
       <div className="absolute inset-0 bg-ucl-navy/80 backdrop-blur-sm" onClick={onClose} />
@@ -134,6 +137,7 @@ export function PredictionModal({ match, prediction, onClose }: Props) {
           </p>
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

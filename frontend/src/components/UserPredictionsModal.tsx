@@ -1,3 +1,4 @@
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -19,7 +20,9 @@ export function UserPredictionsModal({ userId, teamName, onClose }: Props) {
   const { t } = useTranslation();
   const { data: predictions, isLoading } = useUserPredictions(userId);
 
-  return (
+  // Portal al body: escapa del ancestro con transform (`.animate-in`), que rompería
+  // el `fixed` y provocaría un scroll en vez de mostrar el modal centrado.
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       {/* Backdrop */}
       <div className="absolute inset-0 bg-ucl-navy/80 backdrop-blur-sm" onClick={onClose} />
@@ -114,6 +117,7 @@ export function UserPredictionsModal({ userId, teamName, onClose }: Props) {
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
