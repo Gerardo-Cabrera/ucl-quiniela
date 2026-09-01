@@ -8,4 +8,5 @@ class LeaderboardEntry(BaseModel):
     total_points: int
     match_points: int
     top8_points: int
+    tournament_points: int   # MVP + máximo goleador
     predictions_count: int

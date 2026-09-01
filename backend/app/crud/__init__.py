@@ -8,5 +8,6 @@ from app.crud.stats import stats_crud  # noqa: F401
 from app.crud.matchday import matchday_crud  # noqa: F401
 from app.crud.teams import team_crud  # noqa: F401
 from app.crud.app_state import app_state_crud  # noqa: F401
+from app.crud.tournament import tournament_crud  # noqa: F401
 
-__all__ = ["user_crud", "match_crud", "prediction_crud", "top8_crud", "leaderboard_crud", "player_crud", "stats_crud", "matchday_crud", "team_crud", "app_state_crud"]
+__all__ = ["user_crud", "match_crud", "prediction_crud", "top8_crud", "leaderboard_crud", "player_crud", "stats_crud", "matchday_crud", "team_crud", "app_state_crud", "tournament_crud"]
