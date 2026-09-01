@@ -8,15 +8,97 @@ import {
   useSortable, arrayMove,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical, Search, Check } from "lucide-react";
+import { GripVertical, Search, Check, Award, Goal, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { useMyTop8, useSaveTop8, useTeamsConfig, useMatches } from "@/hooks";
+import {
+  useMyTop8, useSaveTop8, useTeamsConfig, useMatches,
+  useMyTournament, useSaveTournament, useTournamentPlayers,
+} from "@/hooks";
 import { Spinner, PointsChip } from "@/components/ui";
+import type { Player } from "@/types";
 import { clsx } from "clsx";
 
 interface PickItem {
   id: string;
   team_name: string;
+}
+
+type PlayerRef = { id: number; name: string };
+
+/** Selector de un jugador con buscador (una sola selección). Bloqueado tras el
+ *  cierre: muestra solo el nombre elegido y, si ya se calculó, sus puntos. */
+function PlayerSelect({
+  label, icon, players, selected, locked, points, onSelect,
+}: {
+  label: string;
+  icon: React.ReactNode;
+  players: Player[];
+  selected: PlayerRef | null;
+  locked: boolean;
+  points: number | null;
+  onSelect: (p: PlayerRef | null) => void;
+}) {
+  const { t } = useTranslation();
+  const [search, setSearch] = useState("");
+
+  const q = search.trim().toLowerCase();
+  const matches = q
+    ? players.filter((p) => p.name.toLowerCase().includes(q)).slice(0, 40)
+    : [];
+
+  return (
+    <div className="card p-4">
+      <div className="flex items-center gap-2 mb-3">
+        <span className="text-ucl-gold">{icon}</span>
+        <h3 className="font-display text-lg">{label}</h3>
+        {points != null && <PointsChip points={points} />}
+      </div>
+
+      {selected ? (
+        <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-ucl-blue/20 border border-ucl-blue/40">
+          <span className="flex-1 text-sm font-medium truncate">{selected.name}</span>
+          {!locked && (
+            <button
+              onClick={() => onSelect(null)}
+              aria-label={t("common.close")}
+              className="text-red-400/50 hover:text-red-400 transition-colors"
+            >
+              <X size={16} />
+            </button>
+          )}
+        </div>
+      ) : locked ? (
+        <p className="px-3 py-2.5 text-sm text-ucl-silver/40 italic">{t("tournament.noPick")}</p>
+      ) : (
+        <>
+          <div className="relative">
+            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-ucl-silver/40" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder={t("tournament.searchPlaceholder")}
+              className="input-base w-full pl-9"
+            />
+          </div>
+          {matches.length > 0 && (
+            <div className="mt-2 space-y-1 max-h-56 overflow-y-auto pr-1">
+              {matches.map((p) => (
+                <button
+                  key={p.api_player_id}
+                  onClick={() => { onSelect({ id: p.api_player_id, name: p.name }); setSearch(""); }}
+                  className="w-full px-3 py-2 rounded-lg text-sm text-left text-ucl-silver hover:bg-ucl-blue/30 hover:text-ucl-white transition-colors flex items-center justify-between gap-2"
+                >
+                  <span className="truncate">{p.name}</span>
+                  <span className="text-xs text-ucl-silver/40 shrink-0">{p.team_name}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
 }
 
 function SortableItem({ item, index, locked }: { item: PickItem; index: number; locked: boolean }) {
@@ -77,6 +159,33 @@ export default function Top8Page() {
   const calculated    = savedPicks?.some((p) => p.is_calculated) ?? false;
   const seasonStarted = (matches ?? []).some((m) => Date.parse(m.match_date) <= Date.now());
   const locked        = calculated || seasonStarted;
+
+  // ── Torneo: MVP y máximo goleador ──
+  // Cierre distinto al Top 8: editables hasta que arranca la eliminatoria (primer
+  // partido de fase ≠ league) o tras calcularse. El backend aplica la misma regla.
+  const { data: tournament } = useMyTournament();
+  const { mutate: saveTournament, isPending: tourSaving, isSuccess: tourSaved, reset: tourReset } = useSaveTournament();
+  const tourCalculated  = tournament?.is_calculated ?? false;
+  const knockoutStarted = (matches ?? []).some(
+    (m) => m.phase !== "league" && Date.parse(m.match_date) <= Date.now(),
+  );
+  const tourLocked = tourCalculated || knockoutStarted;
+  const { data: players } = useTournamentPlayers(!tourLocked);
+
+  const [mvp, setMvp]       = useState<PlayerRef | null>(null);
+  const [scorer, setScorer] = useState<PlayerRef | null>(null);
+
+  useEffect(() => {
+    setMvp(tournament?.mvp_player_id ? { id: tournament.mvp_player_id, name: tournament.mvp_player ?? "" } : null);
+    setScorer(tournament?.top_scorer_player_id ? { id: tournament.top_scorer_player_id, name: tournament.top_scorer_player ?? "" } : null);
+  }, [tournament]);
+
+  const tourDirty =
+    (mvp?.id ?? null)    !== (tournament?.mvp_player_id ?? null) ||
+    (scorer?.id ?? null) !== (tournament?.top_scorer_player_id ?? null);
+
+  const handleSaveTournament = () =>
+    saveTournament({ mvp_player_id: mvp?.id ?? null, top_scorer_player_id: scorer?.id ?? null });
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
@@ -246,6 +355,61 @@ export default function Top8Page() {
             })}
           </div>
         </div>
+      </div>
+
+      {/* Torneo: MVP y máximo goleador (cierre distinto: al arrancar la eliminatoria) */}
+      <div className="pt-2 border-t border-ucl-blue/30">
+        <div className="flex items-start justify-between mb-1">
+          <h2 className="font-display text-2xl text-ucl-gold">{t("tournament.title")}</h2>
+          {tourCalculated && (
+            <div className="text-right">
+              <p className="font-display text-3xl text-ucl-gold">
+                {(tournament?.mvp_points ?? 0) + (tournament?.top_scorer_points ?? 0)}
+              </p>
+              <p className="text-xs text-ucl-silver/60 font-mono">{t("tournament.pts")}</p>
+            </div>
+          )}
+        </div>
+        <p className="text-ucl-silver/60 text-sm mb-4">{t("tournament.subtitle")}</p>
+
+        <div className="grid sm:grid-cols-2 gap-4">
+          <PlayerSelect
+            label={t("tournament.mvp")}
+            icon={<Award size={18} />}
+            players={players ?? []}
+            selected={mvp}
+            locked={tourLocked}
+            points={tourCalculated ? (tournament?.mvp_points ?? 0) : null}
+            onSelect={(p) => { tourReset(); setMvp(p); }}
+          />
+          <PlayerSelect
+            label={t("tournament.topScorer")}
+            icon={<Goal size={18} />}
+            players={players ?? []}
+            selected={scorer}
+            locked={tourLocked}
+            points={tourCalculated ? (tournament?.top_scorer_points ?? 0) : null}
+            onSelect={(p) => { tourReset(); setScorer(p); }}
+          />
+        </div>
+
+        {!tourLocked && (
+          <button
+            onClick={handleSaveTournament}
+            disabled={tourSaving || !tourDirty}
+            className="btn-primary w-full mt-4 flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {tourSaving ? <><Spinner size="sm" /> {t("tournament.saving")}</> :
+             tourSaved && !tourDirty ? <><Check size={16} /> {t("tournament.saved")}</> :
+             t("tournament.save")}
+          </button>
+        )}
+
+        {tourLocked && (
+          <div className="mt-4 bg-ucl-gold/10 border border-ucl-gold/20 rounded-lg px-4 py-3 text-sm text-ucl-gold/80">
+            {tourCalculated ? t("tournament.locked") : t("tournament.lockedKnockout")}
+          </div>
+        )}
       </div>
     </div>
   );

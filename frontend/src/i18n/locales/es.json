@@ -80,6 +80,7 @@
     "you": "(tú)",
     "legendMatches": "Partidos",
     "legendTop8": "Top 8",
+    "legendTournament": "Torneo",
     "viewPredictions": "Ver pronósticos",
     "emptyTitle": "Sin datos aún",
     "emptyDescription": "Los puntos aparecerán cuando haya partidos finalizados."
@@ -126,6 +127,7 @@
   "userPredictions": {
     "subtitle": "Pronósticos revelados de este participante",
     "top8Title": "Top 8",
+    "tournamentTitle": "MVP y máximo goleador",
     "predictionsTitle": "Pronósticos",
     "emptyTitle": "Aún no hay nada visible",
     "emptyDescription": "El Top 8 se revela al arrancar la temporada y los pronósticos de cada jornada al empezar su primer partido."
@@ -159,6 +161,20 @@
     "lockedSeason": "🔒 La temporada ya comenzó: tu Top 8 es inmodificable.",
     "teamsTitle": "Equipos UCL",
     "searchPlaceholder": "Buscar equipo..."
+  },
+  "tournament": {
+    "title": "MVP y máximo goleador",
+    "subtitle": "Elige al MVP y al máximo goleador del torneo (5 pts por acierto). Editable hasta que arranca la eliminatoria.",
+    "pts": "PTS TORNEO",
+    "mvp": "MVP",
+    "topScorer": "Máximo goleador",
+    "searchPlaceholder": "Buscar jugador...",
+    "noPick": "— Sin elección —",
+    "save": "Guardar",
+    "saving": "Guardando...",
+    "saved": "Guardado",
+    "locked": "🔒 Tu MVP y máximo goleador ya fueron calculados y no pueden modificarse.",
+    "lockedKnockout": "🔒 La eliminatoria ya comenzó: tu MVP y máximo goleador son inmodificables."
   },
   "aciertos": {
     "title": "Aciertos",

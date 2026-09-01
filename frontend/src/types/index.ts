@@ -73,6 +73,16 @@ export interface Top8Pick {
   is_calculated: boolean;
 }
 
+export interface TournamentPick {
+  mvp_player_id: number | null;
+  mvp_player: string | null;
+  top_scorer_player_id: number | null;
+  top_scorer_player: string | null;
+  mvp_points: number;
+  top_scorer_points: number;
+  is_calculated: boolean;
+}
+
 export interface LeaderboardEntry {
   rank: number;
   user_id: number;
@@ -80,6 +90,7 @@ export interface LeaderboardEntry {
   total_points: number;
   match_points: number;
   top8_points: number;
+  tournament_points: number;   // MVP + máximo goleador
   predictions_count: number;
 }
 

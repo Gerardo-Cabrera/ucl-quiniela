@@ -692,6 +692,17 @@ async def test_tournament_get_me_empty(auth_client: AsyncClient):
 
 
 @pytest.mark.asyncio
+async def test_tournament_players_list(auth_client: AsyncClient):
+    """El selector lee todos los jugadores sincronizados (ordenados por equipo y nombre)."""
+    resp = await auth_client.get("/api/tournament/players")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert len(data) == 4  # sembrados en conftest
+    names = {p["name"] for p in data}
+    assert {"Vinicius Jr", "Bellingham", "Lewandowski", "Lamine Yamal"} == names
+
+
+@pytest.mark.asyncio
 async def test_tournament_save_and_retrieve(auth_client: AsyncClient):
     """Se guardan MVP y máximo goleador por id; se persiste el nombre para mostrarlo."""
     resp = await auth_client.post("/api/tournament/", json={

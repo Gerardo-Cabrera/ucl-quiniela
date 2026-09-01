@@ -1,7 +1,7 @@
 import apiClient from "@/api/client";
 import type {
   Match, Prediction, PredictionOverride, LeaderboardEntry, Top8Pick, Player,
-  StatsSummary, MatchdaysSummary,
+  TournamentPick, StatsSummary, MatchdaysSummary,
   MatchPhase, MatchStatus,
 } from "@/types";
 
@@ -100,6 +100,30 @@ export const top8Api = {
   },
   save: async (picks: { position: number; team_name: string }[]): Promise<Top8Pick[]> => {
     const { data } = await apiClient.post("/api/top8", { picks });
+    return data;
+  },
+};
+
+// ── TORNEO (MVP + máximo goleador) ──────────────────────────────────────────────
+
+export const tournamentApi = {
+  getMine: async (): Promise<TournamentPick | null> => {
+    const { data } = await apiClient.get("/api/tournament/me");
+    return data;
+  },
+  getForUser: async (userId: number): Promise<TournamentPick | null> => {
+    const { data } = await apiClient.get(`/api/tournament/user/${userId}`);
+    return data;
+  },
+  getPlayers: async (): Promise<Player[]> => {
+    const { data } = await apiClient.get("/api/tournament/players");
+    return data;
+  },
+  save: async (payload: {
+    mvp_player_id?: number | null;
+    top_scorer_player_id?: number | null;
+  }): Promise<TournamentPick> => {
+    const { data } = await apiClient.post("/api/tournament", payload);
     return data;
   },
 };

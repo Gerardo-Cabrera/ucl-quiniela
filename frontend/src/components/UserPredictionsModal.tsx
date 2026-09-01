@@ -1,9 +1,9 @@
 import { createPortal } from "react-dom";
-import { X } from "lucide-react";
+import { X, Award, Goal } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { useTranslation } from "react-i18next";
-import { useUserPredictions, useUserTop8 } from "@/hooks";
+import { useUserPredictions, useUserTop8, useUserTournament } from "@/hooks";
 import { Spinner, EmptyState, PointsChip, Badge } from "@/components/ui";
 import { clsx } from "clsx";
 
@@ -20,9 +20,11 @@ export function UserPredictionsModal({ userId, teamName, onClose }: Props) {
   const { t } = useTranslation();
   const { data: predictions, isLoading: predLoading } = useUserPredictions(userId);
   const { data: top8, isLoading: top8Loading } = useUserTop8(userId);
-  const isLoading = predLoading || top8Loading;
+  const { data: tournament, isLoading: tourLoading } = useUserTournament(userId);
+  const isLoading = predLoading || top8Loading || tourLoading;
   const hasTop8  = !!top8?.length;
   const hasPreds = !!predictions?.length;
+  const hasTournament = !!(tournament && (tournament.mvp_player || tournament.top_scorer_player));
 
   // Portal al body: escapa del ancestro con transform (`.animate-in`), que rompería
   // el `fixed` y provocaría un scroll en vez de mostrar el modal centrado.
@@ -46,7 +48,7 @@ export function UserPredictionsModal({ userId, teamName, onClose }: Props) {
 
         {isLoading ? (
           <div className="flex justify-center py-12"><Spinner size="lg" /></div>
-        ) : !hasTop8 && !hasPreds ? (
+        ) : !hasTop8 && !hasPreds && !hasTournament ? (
           <EmptyState
             icon="🔒"
             title={t("userPredictions.emptyTitle")}
@@ -65,6 +67,30 @@ export function UserPredictionsModal({ userId, teamName, onClose }: Props) {
                       {p.is_calculated && <PointsChip points={p.points_earned} />}
                     </div>
                   ))}
+                </div>
+              </section>
+            )}
+
+            {hasTournament && (
+              <section>
+                <h3 className="font-display text-lg text-ucl-gold/90 mb-2">{t("userPredictions.tournamentTitle")}</h3>
+                <div className="space-y-1.5">
+                  {tournament!.mvp_player && (
+                    <div className="flex items-center gap-3 px-3 py-2 rounded-lg bg-ucl-blue/15">
+                      <Award size={15} className="text-ucl-gold/70 shrink-0" />
+                      <span className="text-xs text-ucl-silver/50 shrink-0">{t("tournament.mvp")}</span>
+                      <span className="flex-1 text-sm truncate text-right sm:text-left">{tournament!.mvp_player}</span>
+                      {tournament!.is_calculated && <PointsChip points={tournament!.mvp_points} />}
+                    </div>
+                  )}
+                  {tournament!.top_scorer_player && (
+                    <div className="flex items-center gap-3 px-3 py-2 rounded-lg bg-ucl-blue/15">
+                      <Goal size={15} className="text-ucl-gold/70 shrink-0" />
+                      <span className="text-xs text-ucl-silver/50 shrink-0">{t("tournament.topScorer")}</span>
+                      <span className="flex-1 text-sm truncate text-right sm:text-left">{tournament!.top_scorer_player}</span>
+                      {tournament!.is_calculated && <PointsChip points={tournament!.top_scorer_points} />}
+                    </div>
+                  )}
                 </div>
               </section>
             )}

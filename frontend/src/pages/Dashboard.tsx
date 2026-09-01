@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Trophy, Target, Star, Share2 } from "lucide-react";
+import { Trophy, Target, Star, Award, Share2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useLeaderboard } from "@/hooks";
 import { Card, Spinner, EmptyState } from "@/components/ui";
@@ -124,6 +124,7 @@ export default function Dashboard() {
                 <div className="hidden sm:flex items-center gap-3 text-xs text-ucl-silver/60 font-mono">
                   <span title={t("dashboard.legendMatches")}><Target size={11} className="inline mr-0.5" />{entry.match_points}</span>
                   <span title={t("dashboard.legendTop8")}><Star size={11} className="inline mr-0.5" />{entry.top8_points}</span>
+                  <span title={t("dashboard.legendTournament")}><Award size={11} className="inline mr-0.5" />{entry.tournament_points}</span>
                 </div>
 
                 {/* Total */}
@@ -142,6 +143,7 @@ export default function Dashboard() {
         <div className="mt-4 pt-4 border-t border-ucl-blue/30 flex items-center gap-4 text-xs text-ucl-silver/50 font-mono">
           <span><Target size={11} className="inline mr-1" />{t("dashboard.legendMatches")}</span>
           <span><Star size={11} className="inline mr-1" />{t("dashboard.legendTop8")}</span>
+          <span><Award size={11} className="inline mr-1" />{t("dashboard.legendTournament")}</span>
         </div>
       </Card>
 

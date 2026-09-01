@@ -6,10 +6,21 @@ from app.models.user import User
 from app.schemas.tournament import (
     TournamentPredictionCreate, TournamentPredictionOut, TournamentCalculateRequest,
 )
+from app.schemas.player import PlayerOut
 from app.core.deps import get_current_user, get_admin_user
 from app.crud import tournament_crud, player_crud, match_crud
 
 router = APIRouter(prefix="/tournament", tags=["Tournament"])
+
+
+@router.get("/players", response_model=list[PlayerOut])
+async def list_players(
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    """Todos los jugadores sincronizados, para el selector de MVP/máximo goleador
+    (el cliente filtra por nombre). Vacío si aún no se sincronizaron plantillas."""
+    return await player_crud.get_all(db)
 
 
 async def _resolve_player(db: AsyncSession, player_id: int | None) -> tuple[int | None, str | None]:
