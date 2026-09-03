@@ -13,9 +13,16 @@ export interface DayGroup<T> {
   items: T[];
 }
 
-/** Agrupa por día local, en orden cronológico, conservando el orden de llegada dentro
- *  de cada día. Cabeceras de fecha en Partidos y Mis Pronósticos. */
-export function groupByDay<T>(items: T[], getDate: (item: T) => string): DayGroup<T>[] {
+/** Agrupa por día local y ordena días y elementos por fecha en el sentido pedido
+ *  (`asc`: Partidos, cronológico; `desc`: Mis Pronósticos, lo más reciente primero).
+ *  Empates de hora conservan el orden de llegada (sort estable). Cabeceras de fecha
+ *  en Partidos y Mis Pronósticos. */
+export function groupByDay<T>(
+  items: T[],
+  getDate: (item: T) => string,
+  order: "asc" | "desc" = "asc",
+): DayGroup<T>[] {
+  const sign = order === "asc" ? 1 : -1;
   const groups = new Map<string, DayGroup<T>>();
   for (const item of items) {
     const date = new Date(getDate(item));
@@ -24,7 +31,10 @@ export function groupByDay<T>(items: T[], getDate: (item: T) => string): DayGrou
     group.items.push(item);
     groups.set(day, group);
   }
-  return [...groups.values()].sort((a, b) => a.day.localeCompare(b.day));
+  for (const group of groups.values()) {
+    group.items.sort((a, b) => sign * (Date.parse(getDate(a)) - Date.parse(getDate(b))));
+  }
+  return [...groups.values()].sort((a, b) => sign * a.day.localeCompare(b.day));
 }
 
 /** "Lunes 8 de septiembre" (inicial en mayúscula; date-fns la da en minúscula). */

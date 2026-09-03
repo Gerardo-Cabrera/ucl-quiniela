@@ -41,7 +41,7 @@ export default function MyPredictionsPage() {
         />
       ) : (
         <div className="space-y-6">
-          {groupByDay(predictions, (p) => p.match.match_date).map((group) => (
+          {groupByDay(predictions, (p) => p.match.match_date, "desc").map((group) => (
             <section key={group.day}>
               <DayHeader date={group.date} />
               <div className="space-y-3">
