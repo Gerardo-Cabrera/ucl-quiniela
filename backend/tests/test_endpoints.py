@@ -530,6 +530,11 @@ async def test_top8_all_endpoint_removed(auth_client: AsyncClient):
 
 
 @pytest.mark.asyncio
+async def test_top8_actual_empty_before_calculation(auth_client: AsyncClient):
+    assert (await auth_client.get("/api/top8/actual")).json() == []
+
+
+@pytest.mark.asyncio
 async def test_top8_calculate_scores_picks(admin_client: AsyncClient):
     # Guardar picks: posiciones 1-7 correctas, octavo equipo fuera del top8 real.
     my_teams = VALID_TOP8[:7] + ["Juventus"]
@@ -544,6 +549,8 @@ async def test_top8_calculate_scores_picks(admin_client: AsyncClient):
     assert all(p["is_calculated"] for p in picks)
     # 7 aciertos exactos (5 pts) + 1 fallo (0 pts) = 35
     assert sum(p["points_earned"] for p in picks) == 35
+    # Queda constancia del Top 8 real con el que se puntuó.
+    assert (await admin_client.get("/api/top8/actual")).json() == VALID_TOP8
 
     # Una vez calculado, el Top 8 queda bloqueado.
     resp = await admin_client.post("/api/top8/", json=_picks_payload(VALID_TOP8))

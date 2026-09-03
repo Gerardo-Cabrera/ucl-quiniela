@@ -197,6 +197,15 @@ export const useUserTop8 = (userId: number | null) =>
     enabled:  userId != null,
   });
 
+// Top 8 REAL con el que se puntuó (vacío hasta calcularse). Cambia una vez por
+// temporada: cachear. Lo invalida el mismo `["top8"]` de las mutaciones.
+export const useActualTop8 = () =>
+  useQuery({
+    queryKey: ["top8", "actual"],
+    queryFn:  top8Api.getActual,
+    staleTime: 1000 * 60 * 60,
+  });
+
 export const useSaveTop8 = () => {
   const qc = useQueryClient();
   const onError = useErrorToast();

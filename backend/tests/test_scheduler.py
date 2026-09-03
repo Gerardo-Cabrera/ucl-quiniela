@@ -14,6 +14,7 @@ from app.models.prediction import Prediction
 from app.models.user import User
 from app.models.player import Player
 from app.models.top8_pick import Top8Pick
+from app.crud.app_state import app_state_crud
 from sqlalchemy import select
 from app.services import scheduler as scheduler_module
 from app.services import ucl_api
@@ -331,6 +332,9 @@ async def test_top8_auto_calculated_when_league_ends(monkeypatch):
 
     assert calls == [True]
     assert await _top8_state() == (True, 35)
+    # Queda constancia del Top 8 real (los 8 primeros de la clasificación, por nombre).
+    async with TestSessionLocal() as session:
+        assert await app_state_crud.get_top8_actual(session) == [t["name"] for t in SEED_TEAMS][:8]
 
 
 @pytest.mark.asyncio

@@ -4,7 +4,7 @@ from app.database import get_db
 from app.models.user import User
 from app.schemas import Top8PicksCreate, Top8PickOut, Top8CalculateRequest
 from app.core.deps import get_current_user, get_admin_user
-from app.crud import top8_crud, team_crud, match_crud
+from app.crud import top8_crud, team_crud, match_crud, app_state_crud
 from app.config import settings
 
 router = APIRouter(prefix="/top8", tags=["Top 8"])
@@ -45,6 +45,17 @@ async def get_user_top8(
     if not await match_crud.season_started(db):
         return []
     return await top8_crud.get_by_user(db, user_id)
+
+
+@router.get("/actual", response_model=list[str])
+async def get_actual_top8(
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    """El Top 8 REAL (ordenado 1.º-8.º) con el que se puntuaron los picks: constancia
+    de cómo quedó la fase de liga. Vacío hasta que se calcula (automático al terminar
+    la liga, o `/top8/calculate`)."""
+    return await app_state_crud.get_top8_actual(db)
 
 
 @router.post("/", response_model=list[Top8PickOut], status_code=201)

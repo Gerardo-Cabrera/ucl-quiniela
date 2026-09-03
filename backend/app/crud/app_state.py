@@ -25,5 +25,14 @@ class AppStateCRUD:
         await db.flush()
         return state
 
+    async def get_top8_actual(self, db: AsyncSession) -> list[str]:
+        """Top 8 real ordenado 1.º-8.º (vacío hasta que se calcula)."""
+        return (await self.get(db)).top8_actual or []
+
+    async def set_top8_actual(self, db: AsyncSession, teams: list[str]) -> None:
+        state = await self.get(db)
+        state.top8_actual = list(teams)
+        await db.flush()
+
 
 app_state_crud = AppStateCRUD()
