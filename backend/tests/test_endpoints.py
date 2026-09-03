@@ -678,6 +678,7 @@ async def test_prediction_get_match_players(auth_client: AsyncClient):
     # 2 de Real Madrid + 2 de Barcelona sembrados en conftest.
     assert {"Vinicius Jr", "Lewandowski"} <= names
     assert len(resp.json()) == 4
+    assert all("photo" in p for p in resp.json())   # selector visual con fotos
 
 
 # ── TOURNAMENT: MVP y máximo goleador ────────────────────────────────────────

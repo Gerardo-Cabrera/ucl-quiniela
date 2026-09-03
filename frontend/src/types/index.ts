@@ -52,6 +52,7 @@ export interface Player {
   name: string;
   team_name: string;
   position: string | null;
+  photo: string | null;
 }
 
 export interface Prediction {

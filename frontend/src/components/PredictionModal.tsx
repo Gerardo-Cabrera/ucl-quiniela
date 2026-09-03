@@ -2,7 +2,7 @@ import { useState } from "react";
 import { createPortal } from "react-dom";
 import { X, Minus, Plus } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { groupSquad } from "@/lib/players";
+import { PlayerPicker } from "@/components/PlayerPicker";
 import type { Match, Prediction } from "@/types";
 import { useSavePrediction, useMatchPlayers } from "@/hooks";
 import { Spinner } from "@/components/ui";
@@ -37,21 +37,18 @@ export function PredictionModal({ match, prediction, onClose }: Props) {
   const { t } = useTranslation();
   const [homeScore, setHomeScore] = useState(prediction?.predicted_home ?? 0);
   const [awayScore, setAwayScore]  = useState(prediction?.predicted_away ?? 0);
-  const [firstGoalPlayerId, setFirstGoalPlayerId] = useState<string>(
-    prediction?.first_goal_player_id != null ? String(prediction.first_goal_player_id) : ""
+  const [firstGoalPlayerId, setFirstGoalPlayerId] = useState<number | null>(
+    prediction?.first_goal_player_id ?? null,
   );
   const { mutate: save, isPending, isSuccess, isError } = useSavePrediction();
   const { data: players = [], isLoading: playersLoading } = useMatchPlayers(match.id);
-
-  // Selector agrupado por equipo (local, visitante) y posición (portero → delantero).
-  const squad = groupSquad(players, [match.home_team, match.away_team]);
 
   const handleSave = () => {
     save({
       match_id:       match.id,
       predicted_home: homeScore,
       predicted_away: awayScore,
-      first_goal_player_id: firstGoalPlayerId ? Number(firstGoalPlayerId) : undefined,
+      first_goal_player_id: firstGoalPlayerId ?? undefined,
     }, { onSuccess: () => setTimeout(onClose, 800) });
   };
 
@@ -101,30 +98,15 @@ export function PredictionModal({ match, prediction, onClose }: Props) {
           ) : players.length === 0 ? (
             <p className="text-ucl-silver/40 text-sm">{t("predictionModal.noSquads")}</p>
           ) : (
-            <select
+            <PlayerPicker
+              players={players}
+              teams={[
+                { name: match.home_team, logo: match.home_team_logo },
+                { name: match.away_team, logo: match.away_team_logo },
+              ]}
               value={firstGoalPlayerId}
-              onChange={(e) => setFirstGoalPlayerId(e.target.value)}
-              className="input-base w-full"
-            >
-              <option value="">{t("predictionModal.noPrediction")}</option>
-              {/* Un optgroup por equipo; dentro, cada posición como cabecera no
-                  seleccionable y sus jugadores sangrados (el select nativo solo
-                  admite un nivel de grupo). */}
-              {squad.map((team) => (
-                <optgroup key={team.team} label={team.team}>
-                  {team.positions.flatMap((g) => [
-                    <option key={`pos-${g.position}`} disabled className="text-ucl-gold font-semibold">
-                      {t(`position.${g.position || "unknown"}`)}
-                    </option>,
-                    ...g.players.map((p) => (
-                      <option key={p.api_player_id} value={p.api_player_id}>
-                        {"\u00A0\u00A0"}{p.name}
-                      </option>
-                    )),
-                  ])}
-                </optgroup>
-              ))}
-            </select>
+              onChange={setFirstGoalPlayerId}
+            />
           )}
         </div>
 
