@@ -1,7 +1,6 @@
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
 import { createPortal } from "react-dom";
-import { X, Minus, Plus, Check } from "lucide-react";
-import { clsx } from "clsx";
+import { X, Minus, Plus } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { groupSquad } from "@/lib/players";
 import type { Match, Prediction } from "@/types";
@@ -34,53 +33,25 @@ function ScoreInput({ value, onChange }: { value: number; onChange: (v: number) 
   );
 }
 
-/** Fila seleccionable de la lista de primer goleador (jugador o "sin pronóstico"). */
-function SquadOption({ selected, onClick, className, children }: {
-  selected: boolean;
-  onClick: () => void;
-  className?: string;
-  children: ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      role="option"
-      aria-selected={selected}
-      onClick={onClick}
-      className={clsx(
-        "w-full flex items-center justify-between gap-2 px-3 py-2 text-sm text-left transition-colors",
-        selected ? "bg-ucl-gold/15 text-ucl-gold font-medium" : "text-ucl-white hover:bg-ucl-blue/30",
-        className,
-      )}
-    >
-      <span className="truncate">{children}</span>
-      {selected && <Check size={14} className="shrink-0" />}
-    </button>
-  );
-}
-
 export function PredictionModal({ match, prediction, onClose }: Props) {
   const { t } = useTranslation();
   const [homeScore, setHomeScore] = useState(prediction?.predicted_home ?? 0);
   const [awayScore, setAwayScore]  = useState(prediction?.predicted_away ?? 0);
-  const [firstGoalPlayerId, setFirstGoalPlayerId] = useState<number | null>(
-    prediction?.first_goal_player_id ?? null,
+  const [firstGoalPlayerId, setFirstGoalPlayerId] = useState<string>(
+    prediction?.first_goal_player_id != null ? String(prediction.first_goal_player_id) : ""
   );
   const { mutate: save, isPending, isSuccess, isError } = useSavePrediction();
   const { data: players = [], isLoading: playersLoading } = useMatchPlayers(match.id);
 
-  // Lista agrupada por equipo (local, visitante) y posición (portero → delantero).
-  // Es una lista propia y no un <select>: el selector nativo del móvil ignora los
-  // estilos de las opciones, así que las cabeceras no podrían leerse bien ahí.
+  // Selector agrupado por equipo (local, visitante) y posición (portero → delantero).
   const squad = groupSquad(players, [match.home_team, match.away_team]);
-  const selectedName = players.find((p) => p.api_player_id === firstGoalPlayerId)?.name;
 
   const handleSave = () => {
     save({
       match_id:       match.id,
       predicted_home: homeScore,
       predicted_away: awayScore,
-      first_goal_player_id: firstGoalPlayerId ?? undefined,
+      first_goal_player_id: firstGoalPlayerId ? Number(firstGoalPlayerId) : undefined,
     }, { onSuccess: () => setTimeout(onClose, 800) });
   };
 
@@ -122,53 +93,38 @@ export function PredictionModal({ match, prediction, onClose }: Props) {
 
         {/* First goal scorer */}
         <div className="mb-6">
-          <p className="text-xs text-ucl-silver/70 mb-2 font-mono uppercase tracking-wider">
+          <label className="block text-xs text-ucl-silver/70 mb-2 font-mono uppercase tracking-wider">
             {t("predictionModal.firstScorer")}
-            {selectedName && <span className="ml-2 normal-case text-ucl-gold">· {selectedName}</span>}
-          </p>
+          </label>
           {playersLoading ? (
             <div className="flex items-center gap-2 text-ucl-silver/50 text-sm"><Spinner size="sm" /> {t("predictionModal.loadingPlayers")}</div>
           ) : players.length === 0 ? (
             <p className="text-ucl-silver/40 text-sm">{t("predictionModal.noSquads")}</p>
           ) : (
-            <div
-              role="listbox"
-              aria-label={t("predictionModal.firstScorer")}
-              className="rounded-lg border border-ucl-blue/60 bg-ucl-navy/60 max-h-56 overflow-y-auto"
+            <select
+              value={firstGoalPlayerId}
+              onChange={(e) => setFirstGoalPlayerId(e.target.value)}
+              className="input-base w-full"
             >
-              <SquadOption
-                selected={firstGoalPlayerId === null}
-                onClick={() => setFirstGoalPlayerId(null)}
-                className="italic text-ucl-silver/60"
-              >
-                {t("predictionModal.noPrediction")}
-              </SquadOption>
+              <option value="">{t("predictionModal.noPrediction")}</option>
+              {/* Un optgroup por equipo; dentro, cada posición como cabecera no
+                  seleccionable y sus jugadores sangrados (el select nativo solo
+                  admite un nivel de grupo). */}
               {squad.map((team) => (
-                <div key={team.team}>
-                  {/* Cabecera de equipo: fija arriba mientras se hace scroll en su bloque. */}
-                  <div className="sticky top-0 bg-ucl-navy px-3 py-1.5 font-display text-base text-ucl-gold border-y border-ucl-blue/40">
-                    {team.team}
-                  </div>
-                  {team.positions.map((g) => (
-                    <div key={g.position}>
-                      <div className="px-3 pt-2 pb-1 text-[11px] font-mono uppercase tracking-wider text-ucl-silver/80">
-                        {t(`position.${g.position || "unknown"}`)}
-                      </div>
-                      {g.players.map((p) => (
-                        <SquadOption
-                          key={p.api_player_id}
-                          selected={firstGoalPlayerId === p.api_player_id}
-                          onClick={() => setFirstGoalPlayerId(p.api_player_id)}
-                          className="pl-6"
-                        >
-                          {p.name}
-                        </SquadOption>
-                      ))}
-                    </div>
-                  ))}
-                </div>
+                <optgroup key={team.team} label={team.team}>
+                  {team.positions.flatMap((g) => [
+                    <option key={`pos-${g.position}`} disabled className="text-ucl-gold font-semibold">
+                      {t(`position.${g.position || "unknown"}`)}
+                    </option>,
+                    ...g.players.map((p) => (
+                      <option key={p.api_player_id} value={p.api_player_id}>
+                        {"\u00A0\u00A0"}{p.name}
+                      </option>
+                    )),
+                  ])}
+                </optgroup>
               ))}
-            </div>
+            </select>
           )}
         </div>
 
