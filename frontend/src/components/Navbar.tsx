@@ -8,7 +8,7 @@ const NAV_ITEMS = [
   { to: "/",            labelKey: "nav.table",       icon: Trophy },
   { to: "/matches",     labelKey: "nav.matches",     icon: CalendarDays },
   { to: "/predictions", labelKey: "nav.predictions", icon: ListChecks },
-  { to: "/top8",        labelKey: "nav.top8",        icon: Star },
+  { to: "/top8",        labelKey: "nav.tournament",  icon: Star },
   { to: "/aciertos",    labelKey: "nav.aciertos",    icon: Target },
   { to: "/jornada",     labelKey: "nav.jornada",     icon: CalendarRange },
   { to: "/mvps",        labelKey: "nav.mvps",        icon: Crown },

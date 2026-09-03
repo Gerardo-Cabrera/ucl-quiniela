@@ -23,6 +23,12 @@ class PlayerCRUD:
         )
         return result.scalar_one_or_none()
 
+    async def get_all(self, db: AsyncSession) -> list[Player]:
+        """Todos los jugadores sincronizados, ordenados por equipo y nombre (fuente
+        del selector de MVP/máximo goleador del torneo; el cliente filtra por nombre)."""
+        result = await db.execute(select(Player).order_by(Player.team_name, Player.name))
+        return list(result.scalars().all())
+
     async def upsert_many(self, db: AsyncSession, players: list[dict]) -> int:
         """Inserta o actualiza jugadores por `api_player_id`. Idempotente."""
         return await upsert_by_key(db, Player, players, "api_player_id")

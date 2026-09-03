@@ -16,6 +16,7 @@ from app.routers import (
     config_router,
     stats_router,
     matchdays_router,
+    tournament_router,
 )
 from app.services.scheduler import start_scheduler, stop_scheduler
 from app.services.ucl_api import close_client
@@ -73,6 +74,7 @@ app.include_router(top8_router,        prefix="/api")
 app.include_router(config_router,      prefix="/api")
 app.include_router(stats_router,       prefix="/api")
 app.include_router(matchdays_router,   prefix="/api")
+app.include_router(tournament_router,  prefix="/api")
 
 
 @app.get("/", tags=["Health"])

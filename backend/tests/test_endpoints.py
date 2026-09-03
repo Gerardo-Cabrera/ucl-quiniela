@@ -502,6 +502,34 @@ async def test_top8_calculate_requires_admin(auth_client: AsyncClient):
 
 
 @pytest.mark.asyncio
+async def test_top8_reveal_only_after_season_start(auth_client: AsyncClient):
+    """El Top 8 ajeno se revela solo cuando arrancó el primer partido de la temporada.
+    (auth_client es el usuario id 1 con BD fresca; se revela su propio Top 8.)"""
+    await auth_client.post("/api/top8/", json=_picks_payload(VALID_TOP8))
+
+    # Sin partidos (temporada no empezada) → oculto (vacío).
+    assert (await auth_client.get("/api/top8/user/1")).json() == []
+
+    # Con el primer partido ya en juego → se revela.
+    async with TestSessionLocal() as session:
+        session.add(Match(
+            api_fixture_id=7001, home_team="Real Madrid", away_team="Barcelona",
+            phase=MatchPhase.LEAGUE, status=MatchStatus.LIVE,
+            match_date=datetime.now(timezone.utc) - timedelta(minutes=5),
+        ))
+        await session.commit()
+    assert len((await auth_client.get("/api/top8/user/1")).json()) == 8
+
+
+@pytest.mark.asyncio
+async def test_top8_all_endpoint_removed(auth_client: AsyncClient):
+    """`/top8/all` se eliminó: exponía el Top 8 de todos sin el gate de revelado,
+    sorteando la privacidad de `/top8/user/{id}`. Se comparan de a uno (ya protegido)."""
+    await auth_client.post("/api/top8/", json=_picks_payload(VALID_TOP8))
+    assert (await auth_client.get("/api/top8/all")).status_code == 404
+
+
+@pytest.mark.asyncio
 async def test_top8_calculate_scores_picks(admin_client: AsyncClient):
     # Guardar picks: posiciones 1-7 correctas, octavo equipo fuera del top8 real.
     my_teams = VALID_TOP8[:7] + ["Juventus"]
@@ -641,6 +669,172 @@ async def test_prediction_get_match_players(auth_client: AsyncClient):
     # 2 de Real Madrid + 2 de Barcelona sembrados en conftest.
     assert {"Vinicius Jr", "Lewandowski"} <= names
     assert len(resp.json()) == 4
+
+
+# ── TOURNAMENT: MVP y máximo goleador ────────────────────────────────────────
+
+
+async def _create_r16_match(**overrides) -> int:
+    """Partido de octavos de final ya iniciado: cierra/revela el pronóstico de MVP
+    y máximo goleador (los play-offs NO cierran)."""
+    defaults = dict(
+        api_fixture_id=9001,
+        phase=MatchPhase.ROUND_OF_16,
+        match_date=datetime.now(timezone.utc) - timedelta(minutes=5),
+    )
+    defaults.update(overrides)
+    return await _create_match(**defaults)
+
+
+@pytest.mark.asyncio
+async def test_tournament_requires_auth(client: AsyncClient):
+    assert (await client.get("/api/tournament/me")).status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_tournament_get_me_empty(auth_client: AsyncClient):
+    """Sin pronóstico guardado, /me devuelve null."""
+    resp = await auth_client.get("/api/tournament/me")
+    assert resp.status_code == 200
+    assert resp.json() is None
+
+
+@pytest.mark.asyncio
+async def test_tournament_players_list(auth_client: AsyncClient):
+    """El selector lee todos los jugadores sincronizados (ordenados por equipo y nombre)."""
+    resp = await auth_client.get("/api/tournament/players")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert len(data) == 4  # sembrados en conftest
+    names = {p["name"] for p in data}
+    assert {"Vinicius Jr", "Bellingham", "Lewandowski", "Lamine Yamal"} == names
+
+
+@pytest.mark.asyncio
+async def test_tournament_save_and_retrieve(auth_client: AsyncClient):
+    """Se guardan MVP y máximo goleador por id; se persiste el nombre para mostrarlo."""
+    resp = await auth_client.post("/api/tournament/", json={
+        "mvp_player_id": 10, "top_scorer_player_id": 20,
+    })
+    assert resp.status_code == 201
+    data = resp.json()
+    assert data["mvp_player_id"] == 10
+    assert data["mvp_player"] == "Vinicius Jr"
+    assert data["top_scorer_player_id"] == 20
+    assert data["top_scorer_player"] == "Lewandowski"
+    assert data["is_calculated"] is False
+
+    me = (await auth_client.get("/api/tournament/me")).json()
+    assert me["mvp_player_id"] == 10 and me["top_scorer_player_id"] == 20
+
+
+@pytest.mark.asyncio
+async def test_tournament_save_partial(auth_client: AsyncClient):
+    """Se puede fijar solo uno; el otro queda null."""
+    resp = await auth_client.post("/api/tournament/", json={"mvp_player_id": 11})
+    assert resp.status_code == 201
+    data = resp.json()
+    assert data["mvp_player"] == "Bellingham"
+    assert data["top_scorer_player_id"] is None
+
+
+@pytest.mark.asyncio
+async def test_tournament_edit_overwrites(auth_client: AsyncClient):
+    """Reenviar sobrescribe la fila del usuario (una por usuario)."""
+    await auth_client.post("/api/tournament/", json={"mvp_player_id": 10, "top_scorer_player_id": 20})
+    await auth_client.post("/api/tournament/", json={"mvp_player_id": 11, "top_scorer_player_id": 21})
+    me = (await auth_client.get("/api/tournament/me")).json()
+    assert me["mvp_player_id"] == 11 and me["top_scorer_player_id"] == 21
+
+
+@pytest.mark.asyncio
+async def test_tournament_rejects_unknown_player(auth_client: AsyncClient):
+    resp = await auth_client.post("/api/tournament/", json={"mvp_player_id": 99999})
+    assert resp.status_code == 400
+    assert "no existe" in resp.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_tournament_locked_after_round_of_16_start(auth_client: AsyncClient):
+    """Con los octavos ya iniciados, guardar se rechaza."""
+    await _create_r16_match()
+    resp = await auth_client.post("/api/tournament/", json={"mvp_player_id": 10})
+    assert resp.status_code == 400
+    assert "octavos" in resp.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_tournament_editable_during_playoffs(auth_client: AsyncClient):
+    """Los play-offs (9.º–24.º) NO cierran el MVP/goleador: solo los octavos."""
+    await _create_match(
+        api_fixture_id=9002, phase=MatchPhase.KNOCKOUT_PLAYOFFS,
+        match_date=datetime.now(timezone.utc) - timedelta(minutes=5),
+    )
+    resp = await auth_client.post("/api/tournament/", json={"mvp_player_id": 10})
+    assert resp.status_code == 201
+
+
+@pytest.mark.asyncio
+async def test_tournament_reveal_only_after_round_of_16(auth_client: AsyncClient):
+    """El pronóstico ajeno se revela solo cuando arrancan los octavos de final.
+    (auth_client es el usuario id 1 con BD fresca; se revela el suyo.)"""
+    await auth_client.post("/api/tournament/", json={"mvp_player_id": 10, "top_scorer_player_id": 20})
+
+    # Sin octavos iniciados → oculto (null).
+    assert (await auth_client.get("/api/tournament/user/1")).json() is None
+
+    # Con el primer partido de octavos ya en juego → se revela.
+    await _create_r16_match()
+    revealed = (await auth_client.get("/api/tournament/user/1")).json()
+    assert revealed["mvp_player_id"] == 10 and revealed["top_scorer_player_id"] == 20
+
+
+@pytest.mark.asyncio
+async def test_tournament_calculate_requires_admin(auth_client: AsyncClient):
+    resp = await auth_client.post("/api/tournament/calculate", json={
+        "mvp_player_id": 10, "top_scorer_player_id": 20,
+    })
+    assert resp.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_tournament_calculate_scores(admin_client: AsyncClient):
+    """10 pts por acierto de MVP/goleador (por id); 0 si falla."""
+    await admin_client.post("/api/tournament/", json={"mvp_player_id": 10, "top_scorer_player_id": 20})
+
+    # MVP acertado (10), máximo goleador fallado (real 21 ≠ pronosticado 20).
+    resp = await admin_client.post("/api/tournament/calculate", json={
+        "mvp_player_id": 10, "top_scorer_player_id": 21,
+    })
+    assert resp.status_code == 200
+    assert resp.json()["users_affected"] == 1
+
+    me = (await admin_client.get("/api/tournament/me")).json()
+    assert me["mvp_points"] == 10
+    assert me["top_scorer_points"] == 0
+    assert me["is_calculated"] is True
+
+
+@pytest.mark.asyncio
+async def test_tournament_calculate_rejects_unknown_player(admin_client: AsyncClient):
+    resp = await admin_client.post("/api/tournament/calculate", json={
+        "mvp_player_id": 99999, "top_scorer_player_id": 20,
+    })
+    assert resp.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_leaderboard_includes_tournament_points(admin_client: AsyncClient):
+    """Los puntos de MVP + máximo goleador suman al total del leaderboard."""
+    await admin_client.post("/api/tournament/", json={"mvp_player_id": 10, "top_scorer_player_id": 20})
+    await admin_client.post("/api/tournament/calculate", json={
+        "mvp_player_id": 10, "top_scorer_player_id": 20,
+    })  # ambos aciertos → 20 pts
+
+    data = (await admin_client.get("/api/leaderboard/")).json()
+    me = next(e for e in data if e["user_id"] == 1)
+    assert me["tournament_points"] == 20
+    assert me["total_points"] == 20
 
 
 # ── HEALTH ENDPOINTS ─────────────────────────────────────────────────────────

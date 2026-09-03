@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import toast from "react-hot-toast";
-import { matchesApi, predictionsApi, leaderboardApi, top8Api, configApi, statsApi, matchdaysApi } from "@/api";
+import { matchesApi, predictionsApi, leaderboardApi, top8Api, tournamentApi, configApi, statsApi, matchdaysApi } from "@/api";
 import { apiErrorMessage } from "@/lib/apiError";
 import { useAuthStore } from "@/store/authStore";
 import { LAST_ACTIVITY_KEY, SESSION_IDLE_MS } from "@/config";
@@ -188,6 +188,15 @@ export const useMyTop8 = () =>
     queryFn:  top8Api.getMine,
   });
 
+// Top 8 de otro participante, revelado tras el primer partido de la temporada
+// (el backend devuelve vacío antes). enabled solo con usuario seleccionado.
+export const useUserTop8 = (userId: number | null) =>
+  useQuery({
+    queryKey: ["top8", "user", userId],
+    queryFn:  () => top8Api.getForUser(userId!),
+    enabled:  userId != null,
+  });
+
 export const useSaveTop8 = () => {
   const qc = useQueryClient();
   const onError = useErrorToast();
@@ -196,6 +205,44 @@ export const useSaveTop8 = () => {
     onError,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["top8"] });
+    },
+  });
+};
+
+// ── TORNEO (MVP + máximo goleador) ──────────────────────────────────────────────
+
+export const useMyTournament = () =>
+  useQuery({
+    queryKey: ["tournament", "mine"],
+    queryFn:  tournamentApi.getMine,
+  });
+
+// Pronóstico de otro participante, revelado tras el primer partido de eliminatoria
+// (el backend devuelve null antes). enabled solo con usuario seleccionado.
+export const useUserTournament = (userId: number | null) =>
+  useQuery({
+    queryKey: ["tournament", "user", userId],
+    queryFn:  () => tournamentApi.getForUser(userId!),
+    enabled:  userId != null,
+  });
+
+// Jugadores para el selector; casi no cambian, cachear 1 h (como las plantillas).
+export const useTournamentPlayers = (enabled: boolean) =>
+  useQuery({
+    queryKey: ["tournament", "players"],
+    queryFn:  tournamentApi.getPlayers,
+    enabled,
+    staleTime: 1000 * 60 * 60,
+  });
+
+export const useSaveTournament = () => {
+  const qc = useQueryClient();
+  const onError = useErrorToast();
+  return useMutation({
+    mutationFn: tournamentApi.save,
+    onError,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["tournament"] });
     },
   });
 };

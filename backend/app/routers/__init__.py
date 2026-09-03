@@ -6,6 +6,7 @@ from app.routers.top8 import router as top8_router
 from app.routers.config import router as config_router
 from app.routers.stats import router as stats_router
 from app.routers.matchdays import router as matchdays_router
+from app.routers.tournament import router as tournament_router
 
 __all__ = [
     "auth_router",
@@ -16,4 +17,5 @@ __all__ = [
     "config_router",
     "stats_router",
     "matchdays_router",
+    "tournament_router",
 ]

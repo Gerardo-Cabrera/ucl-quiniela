@@ -3,6 +3,7 @@ from sqlalchemy import select, func
 from app.models.user import User
 from app.models.prediction import Prediction
 from app.models.top8_pick import Top8Pick
+from app.models.tournament_prediction import TournamentPrediction
 from app.schemas.leaderboard import LeaderboardEntry
 
 
@@ -27,25 +28,41 @@ class LeaderboardCRUD:
             .subquery()
         )
 
+        # Una fila por usuario (user_id único): MVP + máximo goleador.
+        tournament_pts_q = (
+            select(
+                TournamentPrediction.user_id,
+                (
+                    func.coalesce(TournamentPrediction.mvp_points, 0)
+                    + func.coalesce(TournamentPrediction.top_scorer_points, 0)
+                ).label("tournament_points"),
+            )
+            .subquery()
+        )
+
+        # Total = partidos + Top 8 + torneo. Se define una vez y se reutiliza en el
+        # SELECT y en el ORDER BY (sin duplicar la suma).
+        total_expr = (
+            func.coalesce(match_pts_q.c.match_points, 0)
+            + func.coalesce(top8_pts_q.c.top8_points, 0)
+            + func.coalesce(tournament_pts_q.c.tournament_points, 0)
+        )
+
         result = await db.execute(
             select(
                 User.id,
                 User.team_name,
                 func.coalesce(match_pts_q.c.match_points, 0).label("match_points"),
                 func.coalesce(top8_pts_q.c.top8_points, 0).label("top8_points"),
+                func.coalesce(tournament_pts_q.c.tournament_points, 0).label("tournament_points"),
                 func.coalesce(match_pts_q.c.predictions_count, 0).label("predictions_count"),
-                (
-                    func.coalesce(match_pts_q.c.match_points, 0)
-                    + func.coalesce(top8_pts_q.c.top8_points, 0)
-                ).label("total_points"),
+                total_expr.label("total_points"),
             )
             .outerjoin(match_pts_q, User.id == match_pts_q.c.user_id)
             .outerjoin(top8_pts_q, User.id == top8_pts_q.c.user_id)
+            .outerjoin(tournament_pts_q, User.id == tournament_pts_q.c.user_id)
             .order_by(
-                (
-                    func.coalesce(match_pts_q.c.match_points, 0)
-                    + func.coalesce(top8_pts_q.c.top8_points, 0)
-                ).desc(),
+                total_expr.desc(),
                 # Desempate determinista: mismo orden en cada request.
                 User.team_name,
             )
@@ -70,6 +87,7 @@ class LeaderboardCRUD:
                     total_points=row.total_points,
                     match_points=row.match_points,
                     top8_points=row.top8_points,
+                    tournament_points=row.tournament_points,
                     predictions_count=row.predictions_count,
                 )
             )
