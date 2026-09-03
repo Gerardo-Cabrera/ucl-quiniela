@@ -45,3 +45,13 @@ def test_api_football_key_required_in_production():
         Settings(APP_ENV="production", SECRET_KEY="x" * 32, API_FOOTBALL_KEY="")
     # Con key definida no lanza.
     Settings(APP_ENV="production", SECRET_KEY="x" * 32, API_FOOTBALL_KEY="k" * 32)
+
+
+def test_api_requests_per_minute_must_be_positive():
+    """Es el divisor del espaciado de peticiones del sync de plantillas: 0 dividiría
+    por cero en el job y un negativo anularía la espera. Debe fallar al construir
+    Settings (despliegue), no en una tarea en background que ya devolvió 202."""
+    for bad in (0, -5):
+        with pytest.raises(ValidationError):
+            Settings(API_REQUESTS_PER_MINUTE=bad)
+    assert Settings(API_REQUESTS_PER_MINUTE=30).API_REQUESTS_PER_MINUTE == 30

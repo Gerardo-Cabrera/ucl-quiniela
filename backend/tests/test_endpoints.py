@@ -869,6 +869,23 @@ async def test_sync_squads_admin_triggers_job(admin_client: AsyncClient, monkeyp
     assert calls == [True]
 
 
+@pytest.mark.asyncio
+async def test_sync_squads_conflict_when_in_progress(admin_client: AsyncClient, monkeypatch):
+    """Con una corrida en curso responde 409 y NO encola otra."""
+    from app.routers import matches as matches_router
+
+    calls: list[bool] = []
+
+    async def fake_sync_players() -> None:
+        calls.append(True)
+
+    monkeypatch.setattr(matches_router, "players_sync_in_progress", lambda: True)
+    monkeypatch.setattr(matches_router, "sync_players", fake_sync_players)
+    resp = await admin_client.post("/api/matches/sync-squads")
+    assert resp.status_code == 409
+    assert calls == []
+
+
 # ── HEALTH ENDPOINTS ─────────────────────────────────────────────────────────
 
 

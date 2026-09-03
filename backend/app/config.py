@@ -1,6 +1,6 @@
 import json
 from zoneinfo import ZoneInfo
-from pydantic import field_validator, model_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 INSECURE_SECRET_KEY = "change-me-in-production"
@@ -48,8 +48,10 @@ class Settings(BaseSettings):
     # Límite de peticiones por MINUTO del plan de API-Football. Los jobs que hacen
     # una petición por equipo (plantillas: hasta 36) las espacian para no superarlo:
     # en ráfaga la API responde 200 con `errors.rateLimit` y esos equipos quedan sin
-    # sincronizar en silencio.
-    API_REQUESTS_PER_MINUTE: int = 30
+    # sincronizar en silencio. Es el divisor del espaciado: 0 rompería el job y un
+    # negativo anularía la espera, así que se exige > 0 al arrancar (fallo accionable
+    # en el despliegue, no en una tarea en background que ya devolvió 202).
+    API_REQUESTS_PER_MINUTE: int = Field(default=30, gt=0)
     CALC_POINTS_MINUTES: int = 30
     # Fallback: si un partido de fase de liga sigue LIVE pasados estos minutos desde
     # el kickoff, se da por finalizado (135 = 90' + descanso + añadido + margen). No

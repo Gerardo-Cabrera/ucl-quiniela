@@ -7,7 +7,7 @@ from app.schemas import MatchOut, PlayerOut
 from app.core.deps import get_current_user, get_admin_user
 from app.core.rate_limit import limiter
 from app.config import settings
-from app.services.scheduler import sync_ucl_fixtures, sync_players
+from app.services.scheduler import sync_ucl_fixtures, sync_players, players_sync_in_progress
 from app.services.prediction_window import annotate_predictable
 from app.crud import match_crud, player_crud
 
@@ -75,6 +75,9 @@ async def force_sync_squads(
     _: User = Depends(get_admin_user),
 ):
     """Sincroniza en background las plantillas de los equipos vivos (una petición por
-    equipo, espaciadas): para forzarlo tras un mercado de fichajes sin esperar al job."""
+    equipo, espaciadas): para forzarlo tras un mercado de fichajes sin esperar al job.
+    409 si ya hay una corrida en curso (una sola a la vez, también frente al job)."""
+    if players_sync_in_progress():
+        raise HTTPException(status_code=409, detail="Ya hay una sincronización de plantillas en curso.")
     background_tasks.add_task(sync_players)
     return {"message": "Sincronización de plantillas iniciada."}

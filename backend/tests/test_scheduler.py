@@ -5,6 +5,7 @@ Regresión del bug de carrera: calculate_pending_points (cada 30 min) puntuaba
 partidos finalizados antes de que sync_first_goals (cada hora) trajera el dato
 del primer gol, perdiendo esos puntos permanentemente.
 """
+import asyncio
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -376,3 +377,28 @@ async def test_top8_auto_skips_when_already_calculated(monkeypatch):
     await scheduler_module._do_calculate_top8()
 
     assert calls == []
+
+
+@pytest.mark.asyncio
+async def test_sync_players_single_flight(monkeypatch):
+    """Con una corrida en curso, otra llamada (manual o programada) se omite en vez de
+    solaparse: duplicaría el ritmo de peticiones y reconciliaría dos instantáneas."""
+    started, release = asyncio.Event(), asyncio.Event()
+    runs: list[bool] = []
+
+    async def slow_sync() -> None:
+        runs.append(True)
+        started.set()
+        await release.wait()
+
+    monkeypatch.setattr(scheduler_module, "_do_sync_players", slow_sync)
+    first = asyncio.create_task(scheduler_module.sync_players())
+    await started.wait()
+    assert scheduler_module.players_sync_in_progress()
+
+    await scheduler_module.sync_players()   # se omite: ni espera ni duplica
+    assert runs == [True]
+
+    release.set()
+    await first
+    assert not scheduler_module.players_sync_in_progress()

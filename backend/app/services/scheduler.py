@@ -33,6 +33,16 @@ scheduler = AsyncIOScheduler(
 # Marca temporal del último fetch de fixtures con éxito (pacing del sync adaptativo).
 _last_fixtures_fetch: datetime | None = None
 
+# Una sola corrida de plantillas a la vez (job programado y/o forzadas por admin):
+# dos solapadas duplicarían el ritmo de peticiones (volvería el rateLimit) y
+# reconciliarían desde instantáneas distintas. Lock en proceso: el scheduler es
+# in-process y de un solo worker.
+_players_sync_lock = asyncio.Lock()
+
+
+def players_sync_in_progress() -> bool:
+    return _players_sync_lock.locked()
+
 
 async def _retry(coro_func, job_name: str) -> tuple[bool, object]:
     """Ejecuta una coroutine con reintentos en caso de fallo. Devuelve
@@ -256,9 +266,14 @@ async def _do_sync_players():
 async def sync_players():
     """Sincroniza las plantillas (jugadores) de los equipos VIVOS desde API-Football.
     Se ejecuta cada SYNC_SQUADS_HOURS (y al arrancar); forzable tras un mercado de
-    fichajes con `POST /matches/sync-squads` (admin)."""
-    logger.info("Starting players sync...")
-    await _retry(_do_sync_players, "sync_players")
+    fichajes con `POST /matches/sync-squads` (admin). Una corrida a la vez: la que
+    llega con otra en curso se omite (no se encola ni se solapa)."""
+    if _players_sync_lock.locked():
+        logger.info("Players sync omitido: ya hay una corrida en curso.")
+        return
+    async with _players_sync_lock:
+        logger.info("Starting players sync...")
+        await _retry(_do_sync_players, "sync_players")
 
 
 async def _do_sync_first_goals():
