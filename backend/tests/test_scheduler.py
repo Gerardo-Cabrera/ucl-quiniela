@@ -13,10 +13,11 @@ from app.models.match import Match, MatchPhase, MatchStatus
 from app.models.prediction import Prediction
 from app.models.user import User
 from app.models.player import Player
+from app.models.top8_pick import Top8Pick
 from sqlalchemy import select
 from app.services import scheduler as scheduler_module
 from app.services import ucl_api
-from tests.conftest import TestSessionLocal
+from tests.conftest import TestSessionLocal, SEED_TEAMS
 
 
 @pytest.fixture(autouse=True)
@@ -270,3 +271,104 @@ async def test_fetch_paced_spaces_requests(monkeypatch):
     results = await scheduler_module._fetch_paced(fetch, [1, 2, 3])
     assert results[0] == 10 and isinstance(results[1], ValueError) and results[2] == 30
     assert sleeps == [2.0, 2.0]   # n-1 esperas de 60/30 s
+
+
+# ── TOP 8 AUTOMÁTICO AL TERMINAR LA FASE DE LIGA ─────────────────────────────
+
+# 7 en posición exacta (1.º-7.º) y Juventus (9.º real) fuera → 35 pts.
+PICKS = ["Real Madrid", "Manchester City", "Bayern Munich", "Barcelona",
+         "Arsenal", "Liverpool", "Inter Milan", "Juventus"]
+REAL_ORDER = [1, 2, 3, 4, 5, 6, 7, 8, 9]   # ids de conftest; PSG (8) es 8.º
+
+
+async def _seed_top8(picks: list[str] = PICKS, *, calculated: bool = False) -> None:
+    async with TestSessionLocal() as session:
+        user = User(team_name="Top FC", email="top8@test.com", hashed_password="x")
+        session.add(user)
+        await session.flush()
+        session.add_all(
+            Top8Pick(user_id=user.id, position=i, team_name=t, is_calculated=calculated)
+            for i, t in enumerate(picks, start=1)
+        )
+        await session.commit()
+
+
+def _standings(order: list[int], *, played: int) -> list[dict]:
+    names = {t["api_team_id"]: t["name"] for t in SEED_TEAMS}
+    return [{"rank": i, "team": {"id": tid, "name": names[tid]}, "all": {"played": played}}
+            for i, tid in enumerate(order, start=1)]
+
+
+def _fake_standings(monkeypatch, rows: list[dict]) -> list[bool]:
+    """Parchea /standings y devuelve la lista donde se registra cada llamada."""
+    calls: list[bool] = []
+
+    async def fake() -> list[dict]:
+        calls.append(True)
+        return rows
+
+    monkeypatch.setattr(ucl_api, "fetch_standings", fake)
+    return calls
+
+
+async def _top8_state() -> tuple[bool, int]:
+    """(¿todos los picks puntuados?, suma de puntos)."""
+    async with TestSessionLocal() as session:
+        rows = (await session.execute(select(Top8Pick.is_calculated, Top8Pick.points_earned))).all()
+    return all(c for c, _ in rows), sum(p for _, p in rows)
+
+
+@pytest.mark.asyncio
+async def test_top8_auto_calculated_when_league_ends(monkeypatch):
+    """Con TODA la liga finalizada, el job toma el Top 8 real de /standings (por id →
+    nombres de `teams`) y puntúa a todos."""
+    await _add_match(1, 1, 2, status=MatchStatus.FINISHED)   # 2 partidos, 2 equipos locales
+    await _add_match(2, 3, 4, status=MatchStatus.FINISHED)   # → 2 partidos por equipo
+    await _seed_top8()
+    calls = _fake_standings(monkeypatch, _standings(REAL_ORDER, played=2))
+
+    await scheduler_module._do_calculate_top8()
+
+    assert calls == [True]
+    assert await _top8_state() == (True, 35)
+
+
+@pytest.mark.asyncio
+async def test_top8_waits_for_league_end(monkeypatch):
+    """Mientras quede liga por jugar no consulta la API ni puntúa."""
+    await _add_match(1, 1, 2, status=MatchStatus.FINISHED)
+    await _add_match(2, 3, 4, status=MatchStatus.SCHEDULED)
+    await _seed_top8()
+    calls = _fake_standings(monkeypatch, _standings(REAL_ORDER, played=2))
+
+    await scheduler_module._do_calculate_top8()
+
+    assert calls == []
+    assert await _top8_state() == (False, 0)
+
+
+@pytest.mark.asyncio
+async def test_top8_waits_for_complete_standings(monkeypatch):
+    """Liga terminada en BD pero la API aún no refleja todos los partidos jugados:
+    no puntúa (se reintenta en la próxima corrida)."""
+    await _add_match(1, 1, 2, status=MatchStatus.FINISHED)
+    await _add_match(2, 3, 4, status=MatchStatus.FINISHED)
+    await _seed_top8()
+    calls = _fake_standings(monkeypatch, _standings(REAL_ORDER, played=1))
+
+    await scheduler_module._do_calculate_top8()
+
+    assert calls == [True]
+    assert await _top8_state() == (False, 0)
+
+
+@pytest.mark.asyncio
+async def test_top8_auto_skips_when_already_calculated(monkeypatch):
+    """Sin picks pendientes no vuelve a llamar a la API (corre una sola vez)."""
+    await _add_match(1, 1, 2, status=MatchStatus.FINISHED)
+    await _seed_top8(calculated=True)
+    calls = _fake_standings(monkeypatch, _standings(REAL_ORDER, played=2))
+
+    await scheduler_module._do_calculate_top8()
+
+    assert calls == []

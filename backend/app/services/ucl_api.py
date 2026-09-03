@@ -138,6 +138,24 @@ async def fetch_teams(season: int | None = None) -> list[dict]:
     return _extract_response(response.json(), "teams")
 
 
+async def fetch_standings(season: int | None = None) -> list[dict]:
+    """Clasificación de la fase de liga (`/standings?league&season`): una fila por
+    equipo con `rank`, `team{id,name}` y `all{played,...}`. La API la entrega como
+    lista de grupos (tablas); la fase de liga es UNA tabla de 36, pero se aplanan
+    todos por robustez."""
+    response = await get_client().get(
+        f"{BASE_URL}/standings",
+        params={
+            "league": settings.UCL_LEAGUE_ID,
+            "season": season or await resolve_season(),
+        },
+    )
+    response.raise_for_status()
+    data = _extract_response(response.json(), "standings")
+    groups = ((data[0].get("league") or {}).get("standings") or []) if data else []
+    return [row for group in groups for row in group]
+
+
 def parse_team(team_data: dict) -> dict:
     """Transforma una entrada de `/teams` en una fila de la tabla `teams`."""
     t = team_data["team"]

@@ -24,6 +24,14 @@ class Top8CRUD:
         )
         return result.scalar_one_or_none() is not None
 
+    async def has_pending_picks(self, db: AsyncSession) -> bool:
+        """¿Queda algún pick (de cualquier usuario) sin puntuar? Cierre del cálculo
+        automático del Top 8: una vez puntuados todos, no vuelve a correr."""
+        result = await db.execute(
+            select(Top8Pick.id).where(Top8Pick.is_calculated == False).limit(1)  # noqa: E712
+        )
+        return result.scalar_one_or_none() is not None
+
     async def replace_picks(
         self,
         db: AsyncSession,

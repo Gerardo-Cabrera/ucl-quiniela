@@ -6,16 +6,16 @@ import asyncio
 from datetime import datetime, timedelta, timezone
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
-from sqlalchemy import select, update, or_
+from sqlalchemy import select, update, or_, func
 from sqlalchemy.orm import selectinload
 from sqlalchemy.exc import SQLAlchemyError
 from httpx import HTTPStatusError, RequestError
 from app.database import AsyncSessionLocal
-from app.models.match import Match, MatchStatus
+from app.models.match import Match, MatchPhase, MatchStatus
 from app.models.prediction import Prediction
 from app.services import ucl_api
 from app.services.scoring import calculate_match_points
-from app.crud import player_crud, team_crud
+from app.crud import player_crud, team_crud, top8_crud
 from app.crud._upsert import upsert_by_key
 from app.config import settings
 import logging
@@ -367,10 +367,56 @@ async def _do_calculate_points():
         logger.info("Calculated points for %d predictions.", len(predictions))
 
 
+async def _do_calculate_top8():
+    """Puntúa el Top 8 de todos AUTOMÁTICAMENTE al terminar la fase de liga: desde ese
+    momento la clasificación final (puestos 1-8 = clasificados directos a octavos) es
+    definitiva. Mientras no aplica solo hace consultas locales; llama a `/standings`
+    únicamente cuando la liga terminó y quedan picks sin puntuar, y exige la tabla
+    completa (todos los equipos con sus partidos jugados) para no puntuar con una
+    clasificación a medio actualizar. Idempotente y autolimitado: tras puntuar no
+    quedan picks pendientes y deja de correr. `/top8/calculate` (admin) sigue
+    disponible para correcciones."""
+    async with AsyncSessionLocal() as db:
+        if not await top8_crud.has_pending_picks(db):
+            return
+        total, finished, teams = (await db.execute(
+            select(
+                func.count(Match.id),
+                func.count(Match.id).filter(Match.status == MatchStatus.FINISHED),
+                func.count(func.distinct(Match.home_team_api_id)),
+            ).where(Match.phase == MatchPhase.LEAGUE)
+        )).one()
+    if not total or not teams or finished < total:
+        return   # la fase de liga aún no terminó
+    games_per_team = 2 * total // teams   # 144 partidos · 2 / 36 equipos = 8
+
+    standings = await ucl_api.fetch_standings()
+    n = settings.TOP8_PICK_COUNT
+    if len(standings) < n or any(
+        (row.get("all") or {}).get("played", 0) < games_per_team for row in standings
+    ):
+        logger.info("Top 8: la clasificación de la API aún no está completa; se reintenta en la próxima corrida.")
+        return
+    top = sorted(standings, key=lambda row: row["rank"])[:n]
+    top_ids = [row["team"]["id"] for row in top]
+    async with AsyncSessionLocal() as db:
+        names = await team_crud.get_names_by_api_ids(db, top_ids)
+        missing = [tid for tid in top_ids if tid not in names]
+        if missing:
+            logger.error("Top 8: equipos de /standings ausentes en la tabla teams (ids %s); no se puntúa.", missing)
+            return
+        actual_top8 = [names[tid] for tid in top_ids]
+        summary = await top8_crud.calculate_all(db, actual_top8)
+        await db.commit()
+    logger.info("Top 8 puntuado automáticamente al terminar la fase de liga: %s → %s", actual_top8, summary)
+
+
 async def calculate_pending_points():
-    """Calcula puntos de predicciones de partidos finalizados. Se ejecuta cada 30 minutos."""
+    """Calcula puntos de predicciones de partidos finalizados. Se ejecuta cada 30 minutos.
+    Después comprueba el Top 8, que solo aplica una vez: al terminar la fase de liga."""
     logger.info("Starting points calculation...")
     await _retry(_do_calculate_points, "calculate_pending_points")
+    await _retry(_do_calculate_top8, "calculate_top8")
 
 
 def start_scheduler():

@@ -10,6 +10,14 @@ class TeamCRUD:
         result = await db.execute(select(Team.name).order_by(Team.name))
         return [row[0] for row in result.all()]
 
+    async def get_names_by_api_ids(self, db: AsyncSession, api_ids: list[int]) -> dict[int, str]:
+        """`api_team_id` → nombre: traduce ids de la API (p. ej. de `/standings`) a los
+        nombres con los que se guardan los picks del Top 8."""
+        result = await db.execute(
+            select(Team.api_team_id, Team.name).where(Team.api_team_id.in_(api_ids))
+        )
+        return dict(result.all())
+
     async def upsert_many(self, db: AsyncSession, teams: list[dict]) -> int:
         """Inserta o actualiza clubes por `api_team_id`. Idempotente."""
         return await upsert_by_key(db, Team, teams, "api_team_id")
