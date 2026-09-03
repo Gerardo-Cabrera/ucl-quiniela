@@ -7,7 +7,7 @@ from app.schemas import MatchOut, PlayerOut
 from app.core.deps import get_current_user, get_admin_user
 from app.core.rate_limit import limiter
 from app.config import settings
-from app.services.scheduler import sync_ucl_fixtures
+from app.services.scheduler import sync_ucl_fixtures, sync_players
 from app.services.prediction_window import annotate_predictable
 from app.crud import match_crud, player_crud
 
@@ -65,3 +65,16 @@ async def force_sync(
     """Endpoint admin para forzar sincronización manual (en background)."""
     background_tasks.add_task(sync_ucl_fixtures)
     return {"message": "Sincronización iniciada."}
+
+
+@router.post("/sync-squads", status_code=202, summary="Admin: Forzar sync de plantillas")
+@limiter.limit(settings.RATE_LIMIT_SYNC)
+async def force_sync_squads(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    _: User = Depends(get_admin_user),
+):
+    """Sincroniza en background las plantillas de los equipos vivos (una petición por
+    equipo, espaciadas): para forzarlo tras un mercado de fichajes sin esperar al job."""
+    background_tasks.add_task(sync_players)
+    return {"message": "Sincronización de plantillas iniciada."}

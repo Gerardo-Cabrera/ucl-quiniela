@@ -837,6 +837,31 @@ async def test_leaderboard_includes_tournament_points(admin_client: AsyncClient)
     assert me["total_points"] == 20
 
 
+# ── ADMIN: SYNC DE PLANTILLAS ────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_sync_squads_requires_admin(auth_client: AsyncClient):
+    assert (await auth_client.post("/api/matches/sync-squads")).status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_sync_squads_admin_triggers_job(admin_client: AsyncClient, monkeypatch):
+    """Admin: 202 y encola el job de plantillas en background (sin tocar la API).
+    Con ASGITransport las BackgroundTasks corren antes de devolver la respuesta."""
+    from app.routers import matches as matches_router
+
+    calls: list[bool] = []
+
+    async def fake_sync_players() -> None:
+        calls.append(True)
+
+    monkeypatch.setattr(matches_router, "sync_players", fake_sync_players)
+    resp = await admin_client.post("/api/matches/sync-squads")
+    assert resp.status_code == 202
+    assert calls == [True]
+
+
 # ── HEALTH ENDPOINTS ─────────────────────────────────────────────────────────
 
 

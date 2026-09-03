@@ -151,27 +151,28 @@ async def sync_ucl_fixtures():
     await _retry(_do_sync_fixtures, "sync_ucl_fixtures")
 
 
-async def _league_team_ids() -> set[int]:
-    """IDs de equipo (API-Football) presentes en los partidos guardados = los clubes
-    de la FASE DE LIGA. Fuente única para el sync de clubes y de plantillas: sin
-    partidos oficiales en BD el set es vacío (nada que sincronizar)."""
+async def _team_ids_in_matches(*, pending_only: bool = False) -> set[int]:
+    """IDs de equipo (API-Football) presentes en los partidos guardados.
+
+    - `pending_only=False`: todos los partidos → los clubes de la FASE DE LIGA (los 36).
+      Fuente del sync de clubes (selector del Top 8).
+    - `pending_only=True`: solo partidos SIN finalizar → los equipos que siguen VIVOS
+      en la competición. Fuente del sync de plantillas: en fase de liga los 36; tras
+      ella, solo quienes tienen play-off/octavos/etc. por jugar (los eliminados no
+      gastan cuota ni se refrescan).
+    Sin partidos oficiales en BD el set es vacío (nada que sincronizar)."""
+    query = select(Match.home_team_api_id, Match.away_team_api_id)
+    if pending_only:
+        query = query.where(Match.status != MatchStatus.FINISHED)
     async with AsyncSessionLocal() as db:
-        rows = (await db.execute(
-            select(Match.home_team_api_id, Match.away_team_api_id)
-        )).all()
-    ids: set[int] = set()
-    for home, away in rows:
-        if home is not None:
-            ids.add(home)
-        if away is not None:
-            ids.add(away)
-    return ids
+        rows = (await db.execute(query)).all()
+    return {tid for pair in rows for tid in pair if tid is not None}
 
 
 async def _do_sync_teams():
     # Solo los clubes de la fase de liga (los presentes en sus partidos). Sin partidos
     # oficiales en BD no hay nada que sincronizar y no se gasta cuota durante la fase previa.
-    team_ids = await _league_team_ids()
+    team_ids = await _team_ids_in_matches()
     if not team_ids:
         logger.info("Sync de clubes omitido: aún no hay partidos oficiales en BD.")
         return
@@ -200,41 +201,62 @@ async def sync_teams():
     await _retry(_do_sync_teams, "sync_teams")
 
 
+async def _fetch_paced(fetch, keys: list) -> list:
+    """Ejecuta `fetch(key)` para cada key EN SECUENCIA, espaciando las llamadas para
+    respetar API_REQUESTS_PER_MINUTE. En ráfaga (p. ej. 36 plantillas con
+    concurrencia) la API responde 200 con `errors.rateLimit` y esos elementos quedan
+    sin sincronizar. Devuelve, por posición, el resultado o la excepción (mismo
+    contrato que `gather(return_exceptions=True)`), sin abortar el lote."""
+    delay = 60 / settings.API_REQUESTS_PER_MINUTE
+    results: list = []
+    for i, key in enumerate(keys):
+        if i:
+            await asyncio.sleep(delay)
+        try:
+            results.append(await fetch(key))
+        except Exception as e:
+            results.append(e)
+    return results
+
+
 async def _do_sync_players():
-    # Las plantillas se traen por equipo (fase de liga): una petición /players/squads
-    # por equipo, acotada con un semáforo para no saturar la API.
-    team_ids = await _league_team_ids()
+    # Una petición /players/squads por equipo VIVO (con partidos pendientes),
+    # espaciadas para respetar el límite por minuto del plan.
+    team_ids = sorted(await _team_ids_in_matches(pending_only=True))
     if not team_ids:
-        logger.info("Synced 0 players (no hay equipos con id en BD todavía).")
+        logger.info("Synced 0 players (no hay equipos con partidos pendientes en BD).")
         return
 
-    semaphore = asyncio.Semaphore(5)
-
-    async def fetch_one(team_api_id: int) -> list[dict]:
-        async with semaphore:
-            return await ucl_api.fetch_squad(team_api_id)
-
-    squads = await asyncio.gather(
-        *(fetch_one(tid) for tid in team_ids),
-        return_exceptions=True,
-    )
+    squads = await _fetch_paced(ucl_api.fetch_squad, team_ids)
     parsed: list[dict] = []
+    fetched: dict[int, set[int]] = {}   # team_api_id -> ids de su plantilla actual
     for team_api_id, squad in zip(team_ids, squads):
         if isinstance(squad, Exception):
             logger.warning("No se pudo obtener la plantilla del equipo %s: %s", team_api_id, squad)
             continue
-        for entry in squad:
-            parsed.extend(ucl_api.parse_squad(entry))
+        rows = [r for entry in squad for r in ucl_api.parse_squad(entry)]
+        if not rows:
+            # Respuesta vacía (o con `errors`, p. ej. rateLimit): se conserva la
+            # plantilla guardada de ese equipo y, sobre todo, NO se poda.
+            logger.warning("Plantilla vacía para el equipo %s; se conserva la guardada.", team_api_id)
+            continue
+        parsed.extend(rows)
+        fetched[team_api_id] = {r["api_player_id"] for r in rows}
 
     async with AsyncSessionLocal() as db:
         count = await player_crud.upsert_many(db, parsed)
+        # Reconcilia: quita de cada equipo sincronizado los jugadores que ya no están
+        # en su plantilla (bajas/traspasos tras el mercado). Los pronósticos guardan
+        # id + nombre denormalizados, así que no se rompen.
+        removed = await player_crud.delete_missing(db, fetched)
         await db.commit()
-    logger.info("Synced %d players.", count)
+    logger.info("Synced %d players de %d equipos (%d bajas eliminadas).", count, len(fetched), removed)
 
 
 async def sync_players():
-    """Sincroniza las plantillas (jugadores) de los equipos desde API-Football.
-    Se ejecuta cada 24 horas (y al arrancar)."""
+    """Sincroniza las plantillas (jugadores) de los equipos VIVOS desde API-Football.
+    Se ejecuta cada SYNC_SQUADS_HOURS (y al arrancar); forzable tras un mercado de
+    fichajes con `POST /matches/sync-squads` (admin)."""
     logger.info("Starting players sync...")
     await _retry(_do_sync_players, "sync_players")
 

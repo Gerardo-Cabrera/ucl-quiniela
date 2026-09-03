@@ -12,6 +12,8 @@ import pytest
 from app.models.match import Match, MatchPhase, MatchStatus
 from app.models.prediction import Prediction
 from app.models.user import User
+from app.models.player import Player
+from sqlalchemy import select
 from app.services import scheduler as scheduler_module
 from app.services import ucl_api
 from tests.conftest import TestSessionLocal
@@ -184,3 +186,87 @@ async def test_retry_stops_on_auth_error():
     assert ok is False
     assert result is None
     assert calls == 1  # sin reintentos (con retry habrían sido JOB_MAX_RETRIES)
+
+
+# ── SYNC DE PLANTILLAS ───────────────────────────────────────────────────────
+
+
+async def _add_match(
+    api_fixture_id: int, home_id: int, away_id: int, *,
+    status: MatchStatus, phase: MatchPhase = MatchPhase.LEAGUE,
+) -> None:
+    async with TestSessionLocal() as session:
+        session.add(Match(
+            api_fixture_id=api_fixture_id,
+            home_team=f"T{home_id}", away_team=f"T{away_id}",
+            home_team_api_id=home_id, away_team_api_id=away_id,
+            phase=phase, status=status,
+            match_date=datetime.now(timezone.utc) + timedelta(days=1),
+        ))
+        await session.commit()
+
+
+@pytest.mark.asyncio
+async def test_team_ids_pending_only_keeps_alive_teams():
+    """Clubes (Top 8): todos los equipos con partidos. Plantillas: solo los que
+    tienen partidos SIN finalizar (vivos); un eliminado no gasta cuota."""
+    await _add_match(1, 541, 529, status=MatchStatus.FINISHED)      # liga ya jugada
+    await _add_match(2, 541, 50, status=MatchStatus.SCHEDULED, phase=MatchPhase.KNOCKOUT_PLAYOFFS)
+    await _add_match(3, 33, 85, status=MatchStatus.SCHEDULED)       # liga pendiente
+
+    assert await scheduler_module._team_ids_in_matches() == {541, 529, 50, 33, 85}
+    # 529 solo tiene partidos finalizados → eliminado: fuera del sync de plantillas.
+    assert await scheduler_module._team_ids_in_matches(pending_only=True) == {541, 50, 33, 85}
+
+
+@pytest.mark.asyncio
+async def test_sync_players_prunes_departed_and_keeps_failed_teams(monkeypatch):
+    """Tras el sync se añaden las altas y se ELIMINAN las bajas del equipo
+    sincronizado; un equipo cuya petición falla o vuelve vacía (p. ej. rateLimit)
+    conserva su plantilla intacta (no se poda a ciegas)."""
+    monkeypatch.setattr(scheduler_module.settings, "API_REQUESTS_PER_MINUTE", 60_000)  # sin esperas
+    # conftest siembra Real Madrid (541): 10 Vinicius, 11 Bellingham; Barcelona (529): 20, 21.
+    await _add_match(1, 541, 529, status=MatchStatus.SCHEDULED)
+    await _add_match(2, 50, 33, status=MatchStatus.SCHEDULED)
+
+    async def fake_fetch_squad(team_api_id: int) -> list[dict]:
+        if team_api_id == 541:   # Bellingham (11) se fue; llega Mbappé (12)
+            return [{"team": {"id": 541, "name": "Real Madrid"},
+                     "players": [{"id": 10, "name": "Vinicius Jr", "position": "Attacker"},
+                                 {"id": 12, "name": "Mbappé", "position": "Attacker"}]}]
+        if team_api_id == 529:   # fallo de red
+            raise RuntimeError("boom")
+        return []                # 50 y 33: respuesta vacía
+
+    monkeypatch.setattr(ucl_api, "fetch_squad", fake_fetch_squad)
+    await scheduler_module._do_sync_players()
+
+    async with TestSessionLocal() as session:
+        rows = (await session.execute(select(Player.team_api_id, Player.api_player_id))).all()
+    by_team: dict[int, set[int]] = {}
+    for tid, pid in rows:
+        by_team.setdefault(tid, set()).add(pid)
+    assert by_team[541] == {10, 12}   # baja eliminada, alta añadida
+    assert by_team[529] == {20, 21}   # intacto: la petición falló
+
+
+@pytest.mark.asyncio
+async def test_fetch_paced_spaces_requests(monkeypatch):
+    """Peticiones en secuencia con 60/API_REQUESTS_PER_MINUTE s entre ellas; un fallo
+    individual no aborta el lote (se devuelve por posición)."""
+    monkeypatch.setattr(scheduler_module.settings, "API_REQUESTS_PER_MINUTE", 30)
+    sleeps: list[float] = []
+
+    async def fake_sleep(seconds: float) -> None:
+        sleeps.append(seconds)
+
+    monkeypatch.setattr(scheduler_module.asyncio, "sleep", fake_sleep)
+
+    async def fetch(key: int) -> int:
+        if key == 2:
+            raise ValueError("x")
+        return key * 10
+
+    results = await scheduler_module._fetch_paced(fetch, [1, 2, 3])
+    assert results[0] == 10 and isinstance(results[1], ValueError) and results[2] == 30
+    assert sleeps == [2.0, 2.0]   # n-1 esperas de 60/30 s
