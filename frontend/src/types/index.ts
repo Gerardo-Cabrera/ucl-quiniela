@@ -83,6 +83,21 @@ export interface TournamentPick {
   is_calculated: boolean;
 }
 
+export interface TopPlayer {
+  player_id: number | null;
+  name: string;
+  photo: string | null;
+  team: string | null;
+  goals: number;
+  assists: number;
+  matches: number;
+}
+
+export interface TournamentStats {
+  top_scorers: TopPlayer[];
+  top_assists: TopPlayer[];
+}
+
 export interface LeaderboardEntry {
   rank: number;
   user_id: number;

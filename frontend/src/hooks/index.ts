@@ -244,6 +244,15 @@ export const useTournamentPlayers = (enabled: boolean) =>
     staleTime: 1000 * 60 * 60,
   });
 
+// Goleadores y asistidores de la temporada (el job los refresca al terminar cada
+// partido y a diario): basta releer cada 5 min mientras la vista esté abierta.
+export const useTournamentStats = () =>
+  useQuery({
+    queryKey: ["tournament", "stats"],
+    queryFn:  tournamentApi.getStats,
+    refetchInterval: 5 * 60_000,
+  });
+
 export const useSaveTournament = () => {
   const qc = useQueryClient();
   const onError = useErrorToast();

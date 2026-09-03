@@ -21,6 +21,22 @@ class TournamentPredictionOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class TopPlayerOut(BaseModel):
+    """Fila de los rankings de goleadores/asistidores (ver `ucl_api.parse_top_player`)."""
+    player_id: Optional[int] = None
+    name: str
+    photo: Optional[str] = None
+    team: Optional[str] = None
+    goals: int
+    assists: int
+    matches: int
+
+
+class TournamentStatsOut(BaseModel):
+    top_scorers: list[TopPlayerOut]
+    top_assists: list[TopPlayerOut]
+
+
 class TournamentCalculateRequest(BaseModel):
     """Admin: MVP y máximo goleador reales (ids de jugador) para puntuar a todos."""
     mvp_player_id: int

@@ -90,12 +90,19 @@ export function MatchCard({ match, prediction, onPredict }: MatchCardProps) {
       {/* Prediction row */}
       {prediction ? (
         <div className="mt-auto pt-3 border-t border-ucl-blue/30 flex items-center justify-between">
-          <div className="flex items-center gap-2 text-sm">
-            <span className="text-ucl-silver/60 text-xs">{t("matchCard.yourPrediction")}</span>
-            <span className={clsx("font-mono font-bold", hasExact ? "text-ucl-gold" : "text-ucl-white")}>
-              {prediction.predicted_home} - {prediction.predicted_away}
-            </span>
-            {hasExact && <span className="text-xs text-ucl-gold">{t("matchCard.exact")}</span>}
+          <div className="text-sm">
+            <div className="flex items-center gap-2">
+              <span className="text-ucl-silver/60 text-xs">{t("matchCard.yourPrediction")}</span>
+              <span className={clsx("font-mono font-bold", hasExact ? "text-ucl-gold" : "text-ucl-white")}>
+                {prediction.predicted_home} - {prediction.predicted_away}
+              </span>
+              {hasExact && <span className="text-xs text-ucl-gold">{t("matchCard.exact")}</span>}
+            </div>
+            {prediction.first_goal_player && (
+              <p className="text-xs text-ucl-silver/60 mt-0.5">
+                {t("common.firstGoalPick", { player: prediction.first_goal_player })}
+              </p>
+            )}
           </div>
           <div className="flex items-center gap-2">
             {prediction.is_calculated && <PointsChip points={prediction.points_earned} />}

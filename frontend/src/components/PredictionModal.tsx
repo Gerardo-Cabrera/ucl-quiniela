@@ -2,6 +2,7 @@ import { useState } from "react";
 import { createPortal } from "react-dom";
 import { X, Minus, Plus } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { groupSquad } from "@/lib/players";
 import type { Match, Prediction } from "@/types";
 import { useSavePrediction, useMatchPlayers } from "@/hooks";
 import { Spinner } from "@/components/ui";
@@ -42,8 +43,8 @@ export function PredictionModal({ match, prediction, onClose }: Props) {
   const { mutate: save, isPending, isSuccess, isError } = useSavePrediction();
   const { data: players = [], isLoading: playersLoading } = useMatchPlayers(match.id);
 
-  const homePlayers = players.filter((p) => p.team_name === match.home_team);
-  const awayPlayers = players.filter((p) => p.team_name === match.away_team);
+  // Selector agrupado por equipo (local, visitante) y posición (portero → delantero).
+  const squad = groupSquad(players, [match.home_team, match.away_team]);
 
   const handleSave = () => {
     save({
@@ -106,16 +107,16 @@ export function PredictionModal({ match, prediction, onClose }: Props) {
               className="input-base w-full"
             >
               <option value="">{t("predictionModal.noPrediction")}</option>
-              <optgroup label={match.home_team}>
-                {homePlayers.map((p) => (
-                  <option key={p.api_player_id} value={p.api_player_id}>{p.name}</option>
-                ))}
-              </optgroup>
-              <optgroup label={match.away_team}>
-                {awayPlayers.map((p) => (
-                  <option key={p.api_player_id} value={p.api_player_id}>{p.name}</option>
-                ))}
-              </optgroup>
+              {squad.map((g) => (
+                <optgroup
+                  key={`${g.team}-${g.position}`}
+                  label={`${g.team} · ${t(`position.${g.position || "unknown"}`)}`}
+                >
+                  {g.players.map((p) => (
+                    <option key={p.api_player_id} value={p.api_player_id}>{p.name}</option>
+                  ))}
+                </optgroup>
+              ))}
             </select>
           )}
         </div>

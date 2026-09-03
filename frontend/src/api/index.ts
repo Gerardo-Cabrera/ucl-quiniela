@@ -1,7 +1,7 @@
 import apiClient from "@/api/client";
 import type {
   Match, Prediction, PredictionOverride, LeaderboardEntry, Top8Pick, Player,
-  TournamentPick, StatsSummary, MatchdaysSummary,
+  TournamentPick, TournamentStats, StatsSummary, MatchdaysSummary,
   MatchPhase, MatchStatus,
 } from "@/types";
 
@@ -121,6 +121,10 @@ export const tournamentApi = {
   },
   getPlayers: async (): Promise<Player[]> => {
     const { data } = await apiClient.get("/api/tournament/players");
+    return data;
+  },
+  getStats: async (): Promise<TournamentStats> => {
+    const { data } = await apiClient.get("/api/tournament/stats");
     return data;
   },
   save: async (payload: {

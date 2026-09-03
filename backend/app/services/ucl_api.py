@@ -156,6 +156,38 @@ async def fetch_standings(season: int | None = None) -> list[dict]:
     return [row for group in groups for row in group]
 
 
+async def fetch_top_players(kind: str, season: int | None = None) -> list[dict]:
+    """Ranking de jugadores de la temporada: `kind` es `topscorers` o `topassists`
+    (`/players/<kind>?league&season`, hasta 20 jugadores). Cada entrada trae
+    `player{id,name,photo}` y `statistics[0]{team, games, goals{total,assists}}`."""
+    response = await get_client().get(
+        f"{BASE_URL}/players/{kind}",
+        params={
+            "league": settings.UCL_LEAGUE_ID,
+            "season": season or await resolve_season(),
+        },
+    )
+    response.raise_for_status()
+    return _extract_response(response.json(), f"players/{kind}")
+
+
+def parse_top_player(item: dict) -> dict:
+    """Transforma una entrada de `/players/topscorers|topassists` en la fila que
+    muestra la vista Torneo (jugador, equipo, goles, asistencias, partidos)."""
+    player = item.get("player") or {}
+    stats = (item.get("statistics") or [{}])[0]
+    goals = stats.get("goals") or {}
+    return {
+        "player_id": player.get("id"),
+        "name":      player.get("name") or f"#{player.get('id')}",
+        "photo":     player.get("photo"),
+        "team":      (stats.get("team") or {}).get("name"),
+        "goals":     goals.get("total") or 0,
+        "assists":   goals.get("assists") or 0,
+        "matches":   (stats.get("games") or {}).get("appearences") or 0,
+    }
+
+
 def parse_team(team_data: dict) -> dict:
     """Transforma una entrada de `/teams` en una fila de la tabla `teams`."""
     t = team_data["team"]

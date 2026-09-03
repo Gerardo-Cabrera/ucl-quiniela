@@ -402,3 +402,55 @@ async def test_sync_players_single_flight(monkeypatch):
     release.set()
     await first
     assert not scheduler_module.players_sync_in_progress()
+
+
+# ── ESTADÍSTICAS DEL TORNEO (goleadores / asistidores) ───────────────────────
+
+
+def _api_top_player(pid: int, name: str, team: str, goals: int, assists: int) -> dict:
+    """Entrada cruda de /players/topscorers|topassists (forma de API-Football)."""
+    return {"player": {"id": pid, "name": name, "photo": f"https://img/{pid}.png"},
+            "statistics": [{"team": {"name": team}, "games": {"appearences": 8},
+                            "goals": {"total": goals, "assists": assists}}]}
+
+
+@pytest.mark.asyncio
+async def test_sync_tournament_stats_skips_without_finished_matches(monkeypatch):
+    """Pretemporada (sin partidos finalizados): no consulta la API."""
+    calls: list[str] = []
+
+    async def fake(kind: str) -> list[dict]:
+        calls.append(kind)
+        return []
+
+    monkeypatch.setattr(ucl_api, "fetch_top_players", fake)
+    await _add_match(1, 541, 529, status=MatchStatus.SCHEDULED)
+    await scheduler_module._do_sync_tournament_stats()
+    assert calls == []
+
+
+@pytest.mark.asyncio
+async def test_sync_tournament_stats_stores_top_players(monkeypatch):
+    """Con partidos finalizados trae ambos rankings, los parsea (jugador, equipo,
+    goles, asistencias, partidos) y guarda hasta 10 de cada uno."""
+    await _add_match(1, 541, 529, status=MatchStatus.FINISHED)
+
+    async def fake(kind: str) -> list[dict]:
+        if kind == "topscorers":
+            return [_api_top_player(i, f"Goleador {i}", "Real Madrid", 12 - i, 1) for i in range(1, 13)]
+        return [_api_top_player(20, "Asistidor", "Barcelona", 2, 6)]
+
+    monkeypatch.setattr(ucl_api, "fetch_top_players", fake)
+    await scheduler_module._do_sync_tournament_stats()
+
+    async with TestSessionLocal() as session:
+        stats = await app_state_crud.get_tournament_stats(session)
+    assert len(stats["top_scorers"]) == 10   # recorta a 10
+    assert stats["top_scorers"][0] == {
+        "player_id": 1, "name": "Goleador 1", "photo": "https://img/1.png",
+        "team": "Real Madrid", "goals": 11, "assists": 1, "matches": 8,
+    }
+    assert stats["top_assists"] == [{
+        "player_id": 20, "name": "Asistidor", "photo": "https://img/20.png",
+        "team": "Barcelona", "goals": 2, "assists": 6, "matches": 8,
+    }]

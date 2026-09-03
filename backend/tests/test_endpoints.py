@@ -718,6 +718,13 @@ async def test_tournament_players_list(auth_client: AsyncClient):
 
 
 @pytest.mark.asyncio
+async def test_tournament_stats_empty_until_synced(auth_client: AsyncClient):
+    resp = await auth_client.get("/api/tournament/stats")
+    assert resp.status_code == 200
+    assert resp.json() == {"top_scorers": [], "top_assists": []}
+
+
+@pytest.mark.asyncio
 async def test_tournament_save_and_retrieve(auth_client: AsyncClient):
     """Se guardan MVP y máximo goleador por id; se persiste el nombre para mostrarlo."""
     resp = await auth_client.post("/api/tournament/", json={

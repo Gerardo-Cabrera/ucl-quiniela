@@ -87,6 +87,11 @@ export default function MyPredictionsPage() {
                   )}>
                     {pred.predicted_home} - {pred.predicted_away}
                   </p>
+                  {pred.first_goal_player && (
+                    <p className="text-xs text-ucl-silver/60">
+                      {t("common.firstGoalPick", { player: pred.first_goal_player })}
+                    </p>
+                  )}
                   {match.status === "finished" && (
                     <p className="text-xs text-ucl-silver/50 font-mono">
                       {t("predictions.real", { home: match.home_score, away: match.away_score })}

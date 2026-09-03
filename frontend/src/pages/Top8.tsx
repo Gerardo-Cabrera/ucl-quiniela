@@ -8,14 +8,14 @@ import {
   useSortable, arrayMove,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical, Search, Check, Award, Goal, X } from "lucide-react";
+import { GripVertical, Search, Check, Award, Goal, Handshake, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import {
   useMyTop8, useSaveTop8, useTeamsConfig, useMatches, useActualTop8,
-  useMyTournament, useSaveTournament, useTournamentPlayers,
+  useMyTournament, useSaveTournament, useTournamentPlayers, useTournamentStats,
 } from "@/hooks";
 import { Spinner, PointsChip } from "@/components/ui";
-import type { Player } from "@/types";
+import type { Player, TopPlayer } from "@/types";
 import { top8Hits } from "@/lib/top8";
 import { clsx } from "clsx";
 
@@ -102,6 +102,45 @@ function PlayerSelect({
   );
 }
 
+/** Ranking de goleadores o asistidores de la temporada (vista Torneo). */
+function LeadersList({ title, icon, rows, stat }: {
+  title: string;
+  icon: React.ReactNode;
+  rows: TopPlayer[];
+  stat: "goals" | "assists";
+}) {
+  const { t } = useTranslation();
+  return (
+    <div className="card p-4">
+      <div className="flex items-center gap-2 mb-3">
+        <span className="text-ucl-gold">{icon}</span>
+        <h3 className="font-display text-lg">{title}</h3>
+      </div>
+      {rows.length === 0 ? (
+        <p className="text-sm text-ucl-silver/40 italic">{t("tournament.statsEmpty")}</p>
+      ) : (
+        <div className="space-y-1.5">
+          {rows.map((r, i) => (
+            <div key={r.player_id ?? `${r.name}-${i}`} className="flex items-center gap-3 px-3 py-2 rounded-lg bg-ucl-blue/15">
+              <span className="font-display text-lg text-ucl-gold/70 w-6 text-center shrink-0">{i + 1}</span>
+              {r.photo
+                ? <img src={r.photo} alt="" className="w-7 h-7 rounded-full object-cover shrink-0" />
+                : <span className="w-7 h-7 shrink-0" />}
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium truncate">{r.name}</p>
+                <p className="text-xs text-ucl-silver/50 truncate">
+                  {r.team} · {t("tournament.played", { count: r.matches })}
+                </p>
+              </div>
+              <span className="font-display text-2xl text-ucl-gold shrink-0">{r[stat]}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SortableItem({ item, index, locked }: { item: PickItem; index: number; locked: boolean }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.id });
   const style = { transform: CSS.Transform.toString(transform), transition };
@@ -173,6 +212,7 @@ export default function Top8Page() {
   );
   const tourLocked = tourCalculated || r16Started;
   const { data: players } = useTournamentPlayers(!tourLocked);
+  const { data: stats } = useTournamentStats();
 
   const [mvp, setMvp]       = useState<PlayerRef | null>(null);
   const [scorer, setScorer] = useState<PlayerRef | null>(null);
@@ -456,6 +496,16 @@ export default function Top8Page() {
             {tourCalculated ? t("tournament.locked") : t("tournament.lockedRound16")}
           </div>
         )}
+      </div>
+
+      {/* Estadísticas de la temporada: referencia para elegir MVP y máximo goleador */}
+      <div className="pt-2 border-t border-ucl-blue/30">
+        <h2 className="font-display text-2xl text-ucl-gold">{t("tournament.statsTitle")}</h2>
+        <p className="text-ucl-silver/60 text-sm mt-1 mb-4">{t("tournament.statsSubtitle")}</p>
+        <div className="grid sm:grid-cols-2 gap-4">
+          <LeadersList title={t("tournament.scorers")} icon={<Goal size={18} />}      rows={stats?.top_scorers ?? []} stat="goals" />
+          <LeadersList title={t("tournament.assists")} icon={<Handshake size={18} />} rows={stats?.top_assists ?? []} stat="assists" />
+        </div>
       </div>
     </div>
   );

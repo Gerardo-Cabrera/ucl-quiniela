@@ -15,6 +15,9 @@ class AppState(Base):
     - `top8_actual`: el Top 8 REAL (8 nombres ordenados 1.º-8.º) con el que se
       puntuaron los picks; null hasta calcularse. Constancia de cómo quedó la fase
       de liga y base para mostrar los aciertos de cada usuario.
+    - `top_scorers` / `top_assists`: rankings de goleadores y asistidores de la
+      temporada (vista Torneo; filas de `parse_top_player`), refrescados por el job
+      de estadísticas y al terminar cada partido.
     """
     __tablename__ = "app_state"
 
@@ -23,6 +26,8 @@ class AppState(Base):
         Boolean, nullable=False, server_default=false(), default=False
     )
     top8_actual: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
+    top_scorers: Mapped[list[dict] | None] = mapped_column(JSON, nullable=True)
+    top_assists: Mapped[list[dict] | None] = mapped_column(JSON, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
