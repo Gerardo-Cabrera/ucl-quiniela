@@ -92,7 +92,7 @@ export function MatchCard({ match, prediction, onPredict }: MatchCardProps) {
           tengan o no pronóstico. */}
       {match.first_goal_player && (
         <div className="-mt-2 mb-4 flex items-center justify-center gap-1.5 text-xs">
-          <span className="text-ucl-silver/50">⚽ {t("common.firstGoal")}:</span>
+          <span className="text-ucl-silver/50">⚽ {t("common.firstGoalReal")}:</span>
           <span className="font-medium text-ucl-white">{match.first_goal_player}</span>
         </div>
       )}
@@ -108,7 +108,7 @@ export function MatchCard({ match, prediction, onPredict }: MatchCardProps) {
               </span>
               {hasExact && <span className="text-xs text-ucl-gold">{t("matchCard.exact")}</span>}
             </div>
-            <FirstGoalLine prediction={prediction} match={match} compact />
+            <FirstGoalLine prediction={prediction} match={match} showReal={false} />
           </div>
           <div className="flex items-center gap-2">
             {prediction.is_calculated && <PointsChip points={prediction.points_earned} />}

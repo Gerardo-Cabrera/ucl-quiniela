@@ -7,8 +7,8 @@
     "close": "Cerrar",
     "errorGeneric": "No se pudo completar la acción. Intenta de nuevo.",
     "firstGoal": "Primer gol",
-    "noScorer": "sin goleador",
-    "realScorer": " · Primer gol real: {{name}}"
+    "firstGoalReal": "Primer gol real",
+    "noScorer": "sin goleador"
   },
   "brand": {
     "name": "UCL",
