@@ -98,6 +98,10 @@ export const top8Api = {
     const { data } = await apiClient.get(`/api/top8/user/${userId}`);
     return data;
   },
+  getActual: async (): Promise<string[]> => {
+    const { data } = await apiClient.get("/api/top8/actual");
+    return data;
+  },
   save: async (picks: { position: number; team_name: string }[]): Promise<Top8Pick[]> => {
     const { data } = await apiClient.post("/api/top8", { picks });
     return data;

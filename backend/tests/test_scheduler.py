@@ -5,6 +5,7 @@ Regresión del bug de carrera: calculate_pending_points (cada 30 min) puntuaba
 partidos finalizados antes de que sync_first_goals (cada hora) trajera el dato
 del primer gol, perdiendo esos puntos permanentemente.
 """
+import asyncio
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -12,9 +13,13 @@ import pytest
 from app.models.match import Match, MatchPhase, MatchStatus
 from app.models.prediction import Prediction
 from app.models.user import User
+from app.models.player import Player
+from app.models.top8_pick import Top8Pick
+from app.crud.app_state import app_state_crud
+from sqlalchemy import select
 from app.services import scheduler as scheduler_module
 from app.services import ucl_api
-from tests.conftest import TestSessionLocal
+from tests.conftest import TestSessionLocal, SEED_TEAMS
 
 
 @pytest.fixture(autouse=True)
@@ -184,3 +189,216 @@ async def test_retry_stops_on_auth_error():
     assert ok is False
     assert result is None
     assert calls == 1  # sin reintentos (con retry habrían sido JOB_MAX_RETRIES)
+
+
+# ── SYNC DE PLANTILLAS ───────────────────────────────────────────────────────
+
+
+async def _add_match(
+    api_fixture_id: int, home_id: int, away_id: int, *,
+    status: MatchStatus, phase: MatchPhase = MatchPhase.LEAGUE,
+) -> None:
+    async with TestSessionLocal() as session:
+        session.add(Match(
+            api_fixture_id=api_fixture_id,
+            home_team=f"T{home_id}", away_team=f"T{away_id}",
+            home_team_api_id=home_id, away_team_api_id=away_id,
+            phase=phase, status=status,
+            match_date=datetime.now(timezone.utc) + timedelta(days=1),
+        ))
+        await session.commit()
+
+
+@pytest.mark.asyncio
+async def test_team_ids_pending_only_keeps_alive_teams():
+    """Clubes (Top 8): todos los equipos con partidos. Plantillas: solo los que
+    tienen partidos SIN finalizar (vivos); un eliminado no gasta cuota."""
+    await _add_match(1, 541, 529, status=MatchStatus.FINISHED)      # liga ya jugada
+    await _add_match(2, 541, 50, status=MatchStatus.SCHEDULED, phase=MatchPhase.KNOCKOUT_PLAYOFFS)
+    await _add_match(3, 33, 85, status=MatchStatus.SCHEDULED)       # liga pendiente
+
+    assert await scheduler_module._team_ids_in_matches() == {541, 529, 50, 33, 85}
+    # 529 solo tiene partidos finalizados → eliminado: fuera del sync de plantillas.
+    assert await scheduler_module._team_ids_in_matches(pending_only=True) == {541, 50, 33, 85}
+
+
+@pytest.mark.asyncio
+async def test_sync_players_prunes_departed_and_keeps_failed_teams(monkeypatch):
+    """Tras el sync se añaden las altas y se ELIMINAN las bajas del equipo
+    sincronizado; un equipo cuya petición falla o vuelve vacía (p. ej. rateLimit)
+    conserva su plantilla intacta (no se poda a ciegas)."""
+    monkeypatch.setattr(scheduler_module.settings, "API_REQUESTS_PER_MINUTE", 60_000)  # sin esperas
+    # conftest siembra Real Madrid (541): 10 Vinicius, 11 Bellingham; Barcelona (529): 20, 21.
+    await _add_match(1, 541, 529, status=MatchStatus.SCHEDULED)
+    await _add_match(2, 50, 33, status=MatchStatus.SCHEDULED)
+
+    async def fake_fetch_squad(team_api_id: int) -> list[dict]:
+        if team_api_id == 541:   # Bellingham (11) se fue; llega Mbappé (12)
+            return [{"team": {"id": 541, "name": "Real Madrid"},
+                     "players": [{"id": 10, "name": "Vinicius Jr", "position": "Attacker"},
+                                 {"id": 12, "name": "Mbappé", "position": "Attacker"}]}]
+        if team_api_id == 529:   # fallo de red
+            raise RuntimeError("boom")
+        return []                # 50 y 33: respuesta vacía
+
+    monkeypatch.setattr(ucl_api, "fetch_squad", fake_fetch_squad)
+    await scheduler_module._do_sync_players()
+
+    async with TestSessionLocal() as session:
+        rows = (await session.execute(select(Player.team_api_id, Player.api_player_id))).all()
+    by_team: dict[int, set[int]] = {}
+    for tid, pid in rows:
+        by_team.setdefault(tid, set()).add(pid)
+    assert by_team[541] == {10, 12}   # baja eliminada, alta añadida
+    assert by_team[529] == {20, 21}   # intacto: la petición falló
+
+
+@pytest.mark.asyncio
+async def test_fetch_paced_spaces_requests(monkeypatch):
+    """Peticiones en secuencia con 60/API_REQUESTS_PER_MINUTE s entre ellas; un fallo
+    individual no aborta el lote (se devuelve por posición)."""
+    monkeypatch.setattr(scheduler_module.settings, "API_REQUESTS_PER_MINUTE", 30)
+    sleeps: list[float] = []
+
+    async def fake_sleep(seconds: float) -> None:
+        sleeps.append(seconds)
+
+    monkeypatch.setattr(scheduler_module.asyncio, "sleep", fake_sleep)
+
+    async def fetch(key: int) -> int:
+        if key == 2:
+            raise ValueError("x")
+        return key * 10
+
+    results = await scheduler_module._fetch_paced(fetch, [1, 2, 3])
+    assert results[0] == 10 and isinstance(results[1], ValueError) and results[2] == 30
+    assert sleeps == [2.0, 2.0]   # n-1 esperas de 60/30 s
+
+
+# ── TOP 8 AUTOMÁTICO AL TERMINAR LA FASE DE LIGA ─────────────────────────────
+
+# 7 en posición exacta (1.º-7.º) y Juventus (9.º real) fuera → 35 pts.
+PICKS = ["Real Madrid", "Manchester City", "Bayern Munich", "Barcelona",
+         "Arsenal", "Liverpool", "Inter Milan", "Juventus"]
+REAL_ORDER = [1, 2, 3, 4, 5, 6, 7, 8, 9]   # ids de conftest; PSG (8) es 8.º
+
+
+async def _seed_top8(picks: list[str] = PICKS, *, calculated: bool = False) -> None:
+    async with TestSessionLocal() as session:
+        user = User(team_name="Top FC", email="top8@test.com", hashed_password="x")
+        session.add(user)
+        await session.flush()
+        session.add_all(
+            Top8Pick(user_id=user.id, position=i, team_name=t, is_calculated=calculated)
+            for i, t in enumerate(picks, start=1)
+        )
+        await session.commit()
+
+
+def _standings(order: list[int], *, played: int) -> list[dict]:
+    names = {t["api_team_id"]: t["name"] for t in SEED_TEAMS}
+    return [{"rank": i, "team": {"id": tid, "name": names[tid]}, "all": {"played": played}}
+            for i, tid in enumerate(order, start=1)]
+
+
+def _fake_standings(monkeypatch, rows: list[dict]) -> list[bool]:
+    """Parchea /standings y devuelve la lista donde se registra cada llamada."""
+    calls: list[bool] = []
+
+    async def fake() -> list[dict]:
+        calls.append(True)
+        return rows
+
+    monkeypatch.setattr(ucl_api, "fetch_standings", fake)
+    return calls
+
+
+async def _top8_state() -> tuple[bool, int]:
+    """(¿todos los picks puntuados?, suma de puntos)."""
+    async with TestSessionLocal() as session:
+        rows = (await session.execute(select(Top8Pick.is_calculated, Top8Pick.points_earned))).all()
+    return all(c for c, _ in rows), sum(p for _, p in rows)
+
+
+@pytest.mark.asyncio
+async def test_top8_auto_calculated_when_league_ends(monkeypatch):
+    """Con TODA la liga finalizada, el job toma el Top 8 real de /standings (por id →
+    nombres de `teams`) y puntúa a todos."""
+    await _add_match(1, 1, 2, status=MatchStatus.FINISHED)   # 2 partidos, 2 equipos locales
+    await _add_match(2, 3, 4, status=MatchStatus.FINISHED)   # → 2 partidos por equipo
+    await _seed_top8()
+    calls = _fake_standings(monkeypatch, _standings(REAL_ORDER, played=2))
+
+    await scheduler_module._do_calculate_top8()
+
+    assert calls == [True]
+    assert await _top8_state() == (True, 35)
+    # Queda constancia del Top 8 real (los 8 primeros de la clasificación, por nombre).
+    async with TestSessionLocal() as session:
+        assert await app_state_crud.get_top8_actual(session) == [t["name"] for t in SEED_TEAMS][:8]
+
+
+@pytest.mark.asyncio
+async def test_top8_waits_for_league_end(monkeypatch):
+    """Mientras quede liga por jugar no consulta la API ni puntúa."""
+    await _add_match(1, 1, 2, status=MatchStatus.FINISHED)
+    await _add_match(2, 3, 4, status=MatchStatus.SCHEDULED)
+    await _seed_top8()
+    calls = _fake_standings(monkeypatch, _standings(REAL_ORDER, played=2))
+
+    await scheduler_module._do_calculate_top8()
+
+    assert calls == []
+    assert await _top8_state() == (False, 0)
+
+
+@pytest.mark.asyncio
+async def test_top8_waits_for_complete_standings(monkeypatch):
+    """Liga terminada en BD pero la API aún no refleja todos los partidos jugados:
+    no puntúa (se reintenta en la próxima corrida)."""
+    await _add_match(1, 1, 2, status=MatchStatus.FINISHED)
+    await _add_match(2, 3, 4, status=MatchStatus.FINISHED)
+    await _seed_top8()
+    calls = _fake_standings(monkeypatch, _standings(REAL_ORDER, played=1))
+
+    await scheduler_module._do_calculate_top8()
+
+    assert calls == [True]
+    assert await _top8_state() == (False, 0)
+
+
+@pytest.mark.asyncio
+async def test_top8_auto_skips_when_already_calculated(monkeypatch):
+    """Sin picks pendientes no vuelve a llamar a la API (corre una sola vez)."""
+    await _add_match(1, 1, 2, status=MatchStatus.FINISHED)
+    await _seed_top8(calculated=True)
+    calls = _fake_standings(monkeypatch, _standings(REAL_ORDER, played=2))
+
+    await scheduler_module._do_calculate_top8()
+
+    assert calls == []
+
+
+@pytest.mark.asyncio
+async def test_sync_players_single_flight(monkeypatch):
+    """Con una corrida en curso, otra llamada (manual o programada) se omite en vez de
+    solaparse: duplicaría el ritmo de peticiones y reconciliaría dos instantáneas."""
+    started, release = asyncio.Event(), asyncio.Event()
+    runs: list[bool] = []
+
+    async def slow_sync() -> None:
+        runs.append(True)
+        started.set()
+        await release.wait()
+
+    monkeypatch.setattr(scheduler_module, "_do_sync_players", slow_sync)
+    first = asyncio.create_task(scheduler_module.sync_players())
+    await started.wait()
+    assert scheduler_module.players_sync_in_progress()
+
+    await scheduler_module.sync_players()   # se omite: ni espera ni duplica
+    assert runs == [True]
+
+    release.set()
+    await first
+    assert not scheduler_module.players_sync_in_progress()

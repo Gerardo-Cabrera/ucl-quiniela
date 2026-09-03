@@ -2,6 +2,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
 from app.models.top8_pick import Top8Pick
 from app.services.scoring import calculate_top8_points
+from app.crud.app_state import app_state_crud
 
 
 class Top8CRUD:
@@ -21,6 +22,14 @@ class Top8CRUD:
                 Top8Pick.is_calculated == True,  # noqa: E712
             )
             .limit(1)
+        )
+        return result.scalar_one_or_none() is not None
+
+    async def has_pending_picks(self, db: AsyncSession) -> bool:
+        """¿Queda algún pick (de cualquier usuario) sin puntuar? Cierre del cálculo
+        automático del Top 8: una vez puntuados todos, no vuelve a correr."""
+        result = await db.execute(
+            select(Top8Pick.id).where(Top8Pick.is_calculated == False).limit(1)  # noqa: E712
         )
         return result.scalar_one_or_none() is not None
 
@@ -51,7 +60,9 @@ class Top8CRUD:
     async def calculate_all(self, db: AsyncSession, actual_top8: list[str]) -> dict:
         """
         Calcula y persiste los puntos de los picks Top 8 de TODOS los usuarios
-        contra el Top 8 real (ordenado 1-8). Idempotente: recalcula si se reejecuta.
+        contra el Top 8 real (ordenado 1-8) y deja constancia de ese Top 8 real en
+        `app_state.top8_actual` (visible en la app). Idempotente: recalcula si se
+        reejecuta (y sobrescribe la constancia, p. ej. tras una corrección).
         """
         result = await db.execute(select(Top8Pick))
         picks = list(result.scalars().all())
@@ -64,6 +75,7 @@ class Top8CRUD:
             pick.points_earned = score["points_earned"]
             pick.is_calculated = True
 
+        await app_state_crud.set_top8_actual(db, actual_top8)
         await db.flush()
         return {
             "picks_calculated": len(picks),

@@ -3,7 +3,8 @@ import { X, Award, Goal } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { useTranslation } from "react-i18next";
-import { useUserPredictions, useUserTop8, useUserTournament } from "@/hooks";
+import { useUserPredictions, useUserTop8, useUserTournament, useActualTop8 } from "@/hooks";
+import { top8Hits } from "@/lib/top8";
 import { Spinner, EmptyState, PointsChip, Badge } from "@/components/ui";
 import { clsx } from "clsx";
 
@@ -21,6 +22,7 @@ export function UserPredictionsModal({ userId, teamName, onClose }: Props) {
   const { data: predictions, isLoading: predLoading } = useUserPredictions(userId);
   const { data: top8, isLoading: top8Loading } = useUserTop8(userId);
   const { data: tournament, isLoading: tourLoading } = useUserTournament(userId);
+  const actual = useActualTop8().data ?? [];   // Top 8 real, para el resumen de aciertos
   const isLoading = predLoading || top8Loading || tourLoading;
   const hasTop8  = !!top8?.length;
   const hasPreds = !!predictions?.length;
@@ -58,7 +60,14 @@ export function UserPredictionsModal({ userId, teamName, onClose }: Props) {
           <div className="space-y-6 overflow-y-auto pr-1 -mr-1">
             {hasTop8 && (
               <section>
-                <h3 className="font-display text-lg text-ucl-gold/90 mb-2">{t("userPredictions.top8Title")}</h3>
+                <h3 className="font-display text-lg text-ucl-gold/90 mb-2">
+                  {t("userPredictions.top8Title")}
+                  {actual.length > 0 && (
+                    <span className="ml-2 text-xs font-sans font-normal text-ucl-silver/60">
+                      {t("top8.hitsSummary", top8Hits(top8!, actual))}
+                    </span>
+                  )}
+                </h3>
                 <div className="space-y-1.5">
                   {top8!.map((p) => (
                     <div key={p.id} className="flex items-center gap-3 px-3 py-2 rounded-lg bg-ucl-blue/15">

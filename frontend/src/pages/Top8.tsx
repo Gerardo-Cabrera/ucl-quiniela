@@ -11,11 +11,12 @@ import { CSS } from "@dnd-kit/utilities";
 import { GripVertical, Search, Check, Award, Goal, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import {
-  useMyTop8, useSaveTop8, useTeamsConfig, useMatches,
+  useMyTop8, useSaveTop8, useTeamsConfig, useMatches, useActualTop8,
   useMyTournament, useSaveTournament, useTournamentPlayers,
 } from "@/hooks";
 import { Spinner, PointsChip } from "@/components/ui";
 import type { Player } from "@/types";
+import { top8Hits } from "@/lib/top8";
 import { clsx } from "clsx";
 
 interface PickItem {
@@ -135,6 +136,7 @@ export default function Top8Page() {
   const { mutate: save, isPending, isSuccess, reset } = useSaveTop8();
   const { data: teamsConfig } = useTeamsConfig();
   const { data: matches } = useMatches();
+  const actual = useActualTop8().data ?? [];   // Top 8 real (vacío hasta calcularse)
   const uclTeams = teamsConfig?.ucl_teams ?? [];
 
   const [picks, setPicks]   = useState<PickItem[]>([]);
@@ -322,9 +324,45 @@ export default function Top8Page() {
               {calculated ? t("top8.locked") : t("top8.lockedSeason")}
             </div>
           )}
+
+          {actual.length > 0 && savedPicks && (
+            <p className="mt-3 text-sm text-ucl-silver/70">
+              {t("top8.hitsSummary", top8Hits(savedPicks, actual))}
+            </p>
+          )}
         </div>
 
-        {/* Right: Team search */}
+        {/* Right: el Top 8 REAL cuando ya se conoce (constancia + verificación de
+            aciertos frente a tus picks); hasta entonces, el buscador para elegir. */}
+        {actual.length > 0 ? (
+          <div>
+            <h2 className="font-display text-xl mb-3">{t("top8.actualTitle")}</h2>
+            <div className="space-y-2">
+              {actual.map((team, i) => {
+                const mine  = savedPicks?.find((p) => p.team_name === team);
+                const exact = mine?.position === i + 1;
+                return (
+                  <div
+                    key={team}
+                    className={clsx(
+                      "flex items-center gap-3 px-4 py-3 rounded-lg border",
+                      exact ? "bg-ucl-gold/15 border-ucl-gold/40"
+                      : mine ? "bg-ucl-blue/20 border-ucl-blue/40"
+                      : "bg-ucl-blue/10 border-ucl-blue/20 text-ucl-silver/70",
+                    )}
+                  >
+                    <span className="font-display text-2xl text-ucl-gold/70 w-8 text-center shrink-0">{i + 1}</span>
+                    <span className="flex-1 text-sm font-medium">{team}</span>
+                    {exact ? <Check size={16} className="text-ucl-gold shrink-0" />
+                     : mine ? <span className="text-xs font-mono text-ucl-silver/60 shrink-0">#{mine.position}</span>
+                     : null}
+                  </div>
+                );
+              })}
+            </div>
+            <p className="mt-3 text-xs text-ucl-silver/50">{t("top8.actualLegend")}</p>
+          </div>
+        ) : (
         <div>
           <h2 className="font-display text-xl mb-3">{t("top8.teamsTitle")}</h2>
 
@@ -362,9 +400,10 @@ export default function Top8Page() {
             })}
           </div>
         </div>
+        )}
       </div>
 
-      {/* Torneo: MVP y máximo goleador (cierre distinto: al arrancar la eliminatoria) */}
+      {/* Torneo: MVP y máximo goleador (cierre distinto: al arrancar los octavos) */}
       <div className="pt-2 border-t border-ucl-blue/30">
         <div className="flex items-start justify-between mb-1">
           <h2 className="font-display text-2xl text-ucl-gold">{t("tournament.title")}</h2>

@@ -530,6 +530,11 @@ async def test_top8_all_endpoint_removed(auth_client: AsyncClient):
 
 
 @pytest.mark.asyncio
+async def test_top8_actual_empty_before_calculation(auth_client: AsyncClient):
+    assert (await auth_client.get("/api/top8/actual")).json() == []
+
+
+@pytest.mark.asyncio
 async def test_top8_calculate_scores_picks(admin_client: AsyncClient):
     # Guardar picks: posiciones 1-7 correctas, octavo equipo fuera del top8 real.
     my_teams = VALID_TOP8[:7] + ["Juventus"]
@@ -544,6 +549,8 @@ async def test_top8_calculate_scores_picks(admin_client: AsyncClient):
     assert all(p["is_calculated"] for p in picks)
     # 7 aciertos exactos (5 pts) + 1 fallo (0 pts) = 35
     assert sum(p["points_earned"] for p in picks) == 35
+    # Queda constancia del Top 8 real con el que se puntuó.
+    assert (await admin_client.get("/api/top8/actual")).json() == VALID_TOP8
 
     # Una vez calculado, el Top 8 queda bloqueado.
     resp = await admin_client.post("/api/top8/", json=_picks_payload(VALID_TOP8))
@@ -835,6 +842,48 @@ async def test_leaderboard_includes_tournament_points(admin_client: AsyncClient)
     me = next(e for e in data if e["user_id"] == 1)
     assert me["tournament_points"] == 20
     assert me["total_points"] == 20
+
+
+# ── ADMIN: SYNC DE PLANTILLAS ────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_sync_squads_requires_admin(auth_client: AsyncClient):
+    assert (await auth_client.post("/api/matches/sync-squads")).status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_sync_squads_admin_triggers_job(admin_client: AsyncClient, monkeypatch):
+    """Admin: 202 y encola el job de plantillas en background (sin tocar la API).
+    Con ASGITransport las BackgroundTasks corren antes de devolver la respuesta."""
+    from app.routers import matches as matches_router
+
+    calls: list[bool] = []
+
+    async def fake_sync_players() -> None:
+        calls.append(True)
+
+    monkeypatch.setattr(matches_router, "sync_players", fake_sync_players)
+    resp = await admin_client.post("/api/matches/sync-squads")
+    assert resp.status_code == 202
+    assert calls == [True]
+
+
+@pytest.mark.asyncio
+async def test_sync_squads_conflict_when_in_progress(admin_client: AsyncClient, monkeypatch):
+    """Con una corrida en curso responde 409 y NO encola otra."""
+    from app.routers import matches as matches_router
+
+    calls: list[bool] = []
+
+    async def fake_sync_players() -> None:
+        calls.append(True)
+
+    monkeypatch.setattr(matches_router, "players_sync_in_progress", lambda: True)
+    monkeypatch.setattr(matches_router, "sync_players", fake_sync_players)
+    resp = await admin_client.post("/api/matches/sync-squads")
+    assert resp.status_code == 409
+    assert calls == []
 
 
 # ── HEALTH ENDPOINTS ─────────────────────────────────────────────────────────
