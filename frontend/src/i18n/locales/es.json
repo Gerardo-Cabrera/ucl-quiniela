@@ -6,8 +6,9 @@
     "dash": "—",
     "close": "Cerrar",
     "errorGeneric": "No se pudo completar la acción. Intenta de nuevo.",
+    "firstGoal": "Primer gol",
     "noScorer": "sin goleador",
-    "realScorer": " · real: {{name}}"
+    "realScorer": " · Primer gol real: {{name}}"
   },
   "brand": {
     "name": "UCL",
@@ -112,7 +113,6 @@
   },
   "matchCard": {
     "yourPrediction": "Tu pronóstico:",
-    "firstGoalLabel": "Primer gol:",
     "exact": "✓ Exacto",
     "predict": "Pronosticar",
     "editPrediction": "Editar pronóstico",

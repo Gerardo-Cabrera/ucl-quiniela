@@ -51,10 +51,11 @@ export default function MyPredictionsPage() {
               <div
                 key={pred.id}
                 className={clsx(
-                  "card px-5 py-4 flex items-center gap-4",
+                  "card px-5 py-4",
                   isExact && "border-ucl-gold/30 shadow-[0_0_16px_rgba(201,168,76,0.08)]"
                 )}
               >
+                <div className="flex items-center gap-4">
                 {/* Teams logos */}
                 <div className="flex items-center gap-2 shrink-0">
                   {match.home_team_logo ? (
@@ -88,7 +89,6 @@ export default function MyPredictionsPage() {
                   )}>
                     {pred.predicted_home} - {pred.predicted_away}
                   </p>
-                  <FirstGoalLine prediction={pred} match={match} />
                   {match.status === "finished" && (
                     <p className="text-xs text-ucl-silver/50 font-mono">
                       {t("predictions.real", { home: match.home_score, away: match.away_score })}
@@ -112,6 +112,9 @@ export default function MyPredictionsPage() {
                     <span className="text-xs text-ucl-silver/40 font-mono">—</span>
                   )}
                 </div>
+                </div>
+                {/* Primer gol en su propia fila a todo el ancho: etiquetas completas sin recortar. */}
+                <FirstGoalLine prediction={pred} match={match} />
               </div>
             );
           })}

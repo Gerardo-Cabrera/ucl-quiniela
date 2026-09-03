@@ -120,10 +120,11 @@ export function UserPredictionsModal({ userId, teamName, onClose }: Props) {
                 <div
                   key={pred.id}
                   className={clsx(
-                    "card px-4 py-3 flex items-center gap-3",
+                    "card px-4 py-3",
                     isExact && "border-ucl-gold/30 shadow-[0_0_16px_rgba(201,168,76,0.08)]"
                   )}
                 >
+                  <div className="flex items-center gap-3">
                   {/* Teams logos */}
                   <div className="flex items-center gap-2 shrink-0">
                     {match.home_team_logo ? (
@@ -157,7 +158,6 @@ export function UserPredictionsModal({ userId, teamName, onClose }: Props) {
                     )}>
                       {pred.predicted_home} - {pred.predicted_away}
                     </p>
-                    <FirstGoalLine prediction={pred} match={match} />
                     {match.status === "finished" && (
                       <p className="text-xs text-ucl-silver/50 font-mono">
                         {t("predictions.real", { home: match.home_score, away: match.away_score })}
@@ -171,6 +171,9 @@ export function UserPredictionsModal({ userId, teamName, onClose }: Props) {
                       <PointsChip points={pred.points_earned} />
                     </div>
                   )}
+                  </div>
+                  {/* Primer gol en su propia fila a todo el ancho: etiquetas completas sin recortar. */}
+                  <FirstGoalLine prediction={pred} match={match} />
                 </div>
               );
             })}
