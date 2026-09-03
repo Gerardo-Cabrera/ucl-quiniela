@@ -20,6 +20,7 @@ class PredictionOut(BaseModel):
     first_goal_player_id: Optional[int]
     first_goal_player: Optional[str]
     points_earned: int
+    first_goal_points: int   # desglose del primer gol (dentro de points_earned)
     is_calculated: bool
     match: MatchOut
 

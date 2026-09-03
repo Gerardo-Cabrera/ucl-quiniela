@@ -23,6 +23,9 @@ class Prediction(Base):
     first_goal_player: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
     points_earned: Mapped[int] = mapped_column(Integer, default=0)
+    # Desglose persistido: puntos del primer gol dentro de points_earned (la tarjeta
+    # los muestra junto al acierto sin recomputar el scoring en el cliente).
+    first_goal_points: Mapped[int] = mapped_column(Integer, default=0)
     is_calculated: Mapped[bool] = mapped_column(default=False)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

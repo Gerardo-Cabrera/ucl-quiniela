@@ -113,7 +113,7 @@ export function PredictionModal({ match, prediction, onClose }: Props) {
               {squad.map((team) => (
                 <optgroup key={team.team} label={team.team}>
                   {team.positions.flatMap((g) => [
-                    <option key={`pos-${g.position}`} disabled>
+                    <option key={`pos-${g.position}`} disabled className="text-ucl-gold font-semibold">
                       {t(`position.${g.position || "unknown"}`)}
                     </option>,
                     ...g.players.map((p) => (

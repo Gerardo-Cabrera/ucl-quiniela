@@ -62,6 +62,7 @@ export interface Prediction {
   first_goal_player_id: number | null;
   first_goal_player: string | null;
   points_earned: number;
+  first_goal_points: number;   // desglose del primer gol (dentro de points_earned)
   is_calculated: boolean;
   match: Match;
 }

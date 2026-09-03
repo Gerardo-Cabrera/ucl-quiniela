@@ -103,6 +103,7 @@ async def test_calc_scores_with_first_goal_known():
     pred = await _get_prediction(pred_id)
     assert pred.is_calculated is True
     assert pred.points_earned == 11
+    assert pred.first_goal_points == 3   # desglose del primer gol (liga)
 
 
 @pytest.mark.asyncio
@@ -131,6 +132,7 @@ async def test_calc_grace_period_unblocks():
     pred = await _get_prediction(pred_id)
     assert pred.is_calculated is True
     assert pred.points_earned == 8  # exacto, sin punto de primer gol
+    assert pred.first_goal_points == 0
 
 
 @pytest.mark.asyncio
@@ -168,6 +170,7 @@ async def test_sync_first_goals_self_heals(monkeypatch):
     pred = await _get_prediction(pred_id)
     assert pred.is_calculated is True
     assert pred.points_earned == 11  # ahora con el punto de primer gol
+    assert pred.first_goal_points == 3
 
 
 @pytest.mark.asyncio

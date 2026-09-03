@@ -82,6 +82,7 @@ class PredictionCRUD:
         prediction.first_goal_player = first_goal_player
         prediction.is_calculated = False
         prediction.points_earned = 0
+        prediction.first_goal_points = 0
         await db.flush()
         await db.refresh(prediction, attribute_names=["match"])
         return prediction

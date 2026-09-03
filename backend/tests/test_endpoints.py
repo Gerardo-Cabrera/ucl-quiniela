@@ -622,6 +622,7 @@ async def test_prediction_create_success(auth_client: AsyncClient):
     assert data["first_goal_player"] == "Vinicius Jr"
     assert data["is_calculated"] is False
     assert "first_goal_player_id" in data["match"]   # la tarjeta marca el acierto por id
+    assert data["first_goal_points"] == 0
 
 
 @pytest.mark.asyncio

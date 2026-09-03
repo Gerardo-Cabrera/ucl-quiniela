@@ -325,7 +325,7 @@ async def _do_sync_first_goals():
                     Prediction.match_id == match.id,
                     Prediction.is_calculated == True,  # noqa: E712
                 )
-                .values(is_calculated=False, points_earned=0)
+                .values(is_calculated=False, points_earned=0, first_goal_points=0)
             )
 
         await db.commit()
@@ -378,6 +378,7 @@ async def _do_calculate_points():
                 phase=match.phase,
             )
             pred.points_earned = breakdown["total"]
+            pred.first_goal_points = breakdown["first_goal"]
             pred.is_calculated = True
 
         await db.commit()
