@@ -655,6 +655,16 @@ async def test_prediction_rejects_finished_match(auth_client: AsyncClient):
 
 
 @pytest.mark.asyncio
+async def test_prediction_rejects_scorer_on_goalless(auth_client: AsyncClient):
+    """Un 0-0 no tiene primer gol: con goleador se rechaza (422)."""
+    match_id = await _create_match()
+    resp = await auth_client.post("/api/predictions/", json={
+        "match_id": match_id, "predicted_home": 0, "predicted_away": 0, "first_goal_player_id": 10,
+    })
+    assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
 async def test_prediction_rejects_foreign_first_goal_player(auth_client: AsyncClient):
     """El goleador pronosticado debe jugar en uno de los dos equipos del partido."""
     match_id = await _create_match()  # Real Madrid vs Barcelona

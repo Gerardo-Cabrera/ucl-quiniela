@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { X, Minus, Plus } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -42,6 +42,14 @@ export function PredictionModal({ match, prediction, onClose }: Props) {
   );
   const { mutate: save, isPending, isSuccess, isError } = useSavePrediction();
   const { data: players = [], isLoading: playersLoading } = useMatchPlayers(match.id);
+
+  // Sin goles en el marcador no hay primer gol: el selector se oculta y se limpia
+  // la elección, para no enviar un dato oculto e incoherente (el backend también lo
+  // rechaza). Con goles, el goleador sigue siendo opcional.
+  const hasGoals = homeScore + awayScore > 0;
+  useEffect(() => {
+    if (!hasGoals) setFirstGoalPlayerId(null);
+  }, [hasGoals]);
 
   const handleSave = () => {
     save({
@@ -88,7 +96,8 @@ export function PredictionModal({ match, prediction, onClose }: Props) {
           </div>
         </div>
 
-        {/* First goal scorer */}
+        {/* First goal scorer: solo con goles en el marcador (y aun así opcional) */}
+        {hasGoals && (
         <div className="mb-6">
           <label className="block text-xs text-ucl-silver/70 mb-2 font-mono uppercase tracking-wider">
             {t("predictionModal.firstScorer")}
@@ -109,6 +118,7 @@ export function PredictionModal({ match, prediction, onClose }: Props) {
             />
           )}
         </div>
+        )}
 
         {/* Submit */}
         <button
