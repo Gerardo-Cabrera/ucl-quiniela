@@ -457,3 +457,58 @@ async def test_sync_tournament_stats_stores_top_players(monkeypatch):
         "player_id": 20, "name": "Asistidor", "photo": "https://img/20.png",
         "team": "Barcelona", "goals": 2, "assists": 6, "matches": 8,
     }]
+
+
+# ── ERRORES DE API-FOOTBALL (HTTP 200 con `errors`) ──────────────────────────
+
+
+def test_extract_response_raises_on_api_errors():
+    """Un payload con `errors` (cuota, plan, parámetros) no es "0 resultados":
+    lanza ApiFootballError. Sin errores, devuelve `response` tal cual."""
+    assert ucl_api._extract_response({"errors": [], "response": [{"a": 1}]}, "x") == [{"a": 1}]
+    assert ucl_api._extract_response({"errors": {}, "response": []}, "x") == []
+    with pytest.raises(ucl_api.ApiFootballError):
+        ucl_api._extract_response({"errors": {"plan": "not allowed"}, "response": []}, "x")
+
+
+@pytest.mark.asyncio
+async def test_retry_retries_api_errors(monkeypatch):
+    """ApiFootballError se trata como fallo de red/API: aviso y reintento (sin abortar
+    el job con traceback), agotando JOB_MAX_RETRIES."""
+    monkeypatch.setattr(scheduler_module.settings, "JOB_MAX_RETRIES", 2)
+    monkeypatch.setattr(scheduler_module.settings, "JOB_RETRY_DELAY_SECONDS", 0)
+    attempts: list[bool] = []
+
+    async def failing() -> None:
+        attempts.append(True)
+        raise ucl_api.ApiFootballError("cuota agotada")
+
+    ok, _ = await scheduler_module._retry(failing, "job")
+    assert ok is False
+    assert len(attempts) == 2
+
+
+@pytest.mark.asyncio
+async def test_sync_tournament_stats_keeps_previous_on_api_error(monkeypatch):
+    """Un error de la API en cualquiera de los dos rankings NO borra el guardado: el
+    fetch lanza, el job aborta antes de persistir y _retry reintenta más tarde."""
+    await _add_match(1, 541, 529, status=MatchStatus.FINISHED)
+    async with TestSessionLocal() as session:
+        await app_state_crud.set_tournament_stats(session, [{"name": "previo"}], [{"name": "previo"}])
+        await session.commit()
+
+    async def fake(kind: str) -> list[dict]:
+        if kind == "topassists":   # HTTP 200 con errors → lanza
+            return ucl_api._extract_response(
+                {"errors": {"requests": "You have reached the request limit"}, "response": []},
+                "players/topassists",
+            )
+        return [_api_top_player(1, "Goleador", "Real Madrid", 5, 1)]
+
+    monkeypatch.setattr(ucl_api, "fetch_top_players", fake)
+    with pytest.raises(ucl_api.ApiFootballError):
+        await scheduler_module._do_sync_tournament_stats()
+
+    async with TestSessionLocal() as session:
+        stats = await app_state_crud.get_tournament_stats(session)
+    assert stats == {"top_scorers": [{"name": "previo"}], "top_assists": [{"name": "previo"}]}

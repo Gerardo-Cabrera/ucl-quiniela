@@ -53,7 +53,7 @@ async def _retry(coro_func, job_name: str) -> tuple[bool, object]:
     for attempt in range(1, max_retries + 1):
         try:
             return True, await coro_func()
-        except (HTTPStatusError, RequestError) as e:
+        except (HTTPStatusError, RequestError, ucl_api.ApiFootballError) as e:
             status = getattr(getattr(e, "response", None), "status_code", None)
             # 401/403 = problema de credenciales/config, no transitorio: reintentar
             # es inútil y gasta cuota. Se corta con un mensaje accionable.
@@ -66,7 +66,7 @@ async def _retry(coro_func, job_name: str) -> tuple[bool, object]:
                 )
                 return False, None
             logger.warning(
-                "Job %s attempt %d/%d failed (network): %s",
+                "Job %s attempt %d/%d failed (red/API): %s",
                 job_name, attempt, max_retries, str(e),
             )
         except SQLAlchemyError as e:

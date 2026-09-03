@@ -70,16 +70,24 @@ STATUS_MAP = {
 }
 
 
+class ApiFootballError(RuntimeError):
+    """API-Football respondió HTTP 200 con `errors` (plan, cuota, parámetros): no hay
+    datos válidos. Se lanza en vez de devolver `[]` para que los jobs no confundan el
+    fallo con "0 resultados" (p. ej. persistir un ranking vacío sobre uno válido, o
+    dar por sincronizados 0 fixtures). La manejan el reintento de `_retry` o el
+    salto por elemento (`_fetch_paced`, `gather(return_exceptions=True)`)."""
+
+
 def _extract_response(data: dict, endpoint: str) -> list[dict]:
     """Extrae 'response' validando el campo 'errors' de API-Football.
 
     API-Football devuelve HTTP 200 incluso cuando no trae datos por un problema
-    de plan, cuota o parámetros: el motivo viaja en 'errors'. Sin esto, esos
-    casos se verían como "0 resultados" sin explicación en los logs.
+    de plan, cuota o parámetros: el motivo viaja en 'errors'. En ese caso se lanza
+    `ApiFootballError`; devolver `[]` se confundiría con una respuesta válida.
     """
     errors = data.get("errors")
     if errors:  # [] cuando no hay error; dict/lista no vacíos si lo hay.
-        logger.warning("API-Football /%s devolvió errores: %s", endpoint, errors)
+        raise ApiFootballError(f"API-Football /{endpoint} devolvió errores: {errors}")
     return data.get("response", [])
 
 
