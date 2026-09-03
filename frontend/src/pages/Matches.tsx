@@ -4,7 +4,8 @@ import { useMatches, useMyPredictions, usePredictionOverride, useSetPredictionOv
 import { useAuthStore } from "@/store/authStore";
 import { MatchCard } from "@/components/MatchCard";
 import { PredictionModal } from "@/components/PredictionModal";
-import { Spinner, EmptyState } from "@/components/ui";
+import { Spinner, EmptyState, DayHeader } from "@/components/ui";
+import { groupByDay } from "@/lib/date";
 import type { Match, MatchPhase, MatchStatus } from "@/types";
 import { clsx } from "clsx";
 
@@ -122,14 +123,21 @@ export default function MatchesPage() {
       ) : !matches?.length ? (
         <EmptyState icon="📅" title={t("matches.emptyTitle")} description={t("matches.emptyDescription")} />
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-          {matches.map((match) => (
-            <MatchCard
-              key={match.id}
-              match={match}
-              prediction={predictionByMatch[match.id]}
-              onPredict={setSelected}
-            />
+        <div className="space-y-6">
+          {groupByDay(matches, (m) => m.match_date).map((group) => (
+            <section key={group.day}>
+              <DayHeader date={group.date} />
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+                {group.items.map((match) => (
+                  <MatchCard
+                    key={match.id}
+                    match={match}
+                    prediction={predictionByMatch[match.id]}
+                    onPredict={setSelected}
+                  />
+                ))}
+              </div>
+            </section>
           ))}
         </div>
       )}

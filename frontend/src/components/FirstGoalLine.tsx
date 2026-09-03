@@ -1,5 +1,6 @@
 import { useTranslation } from "react-i18next";
 import type { Match, Prediction } from "@/types";
+import { clsx } from "clsx";
 
 interface Props {
   prediction: Prediction;
@@ -8,6 +9,8 @@ interface Props {
    *  tarjeta ya muestra el primer gol real en su propia fila (para todos, con o
    *  sin pronóstico); así cada dato va en una fila y nada se repite. */
   showReal?: boolean;
+  /** Separación superior (por defecto mt-0.5; las listas la aumentan). */
+  className?: string;
 }
 
 /** Línea de primer gol de una tarjeta de pronóstico:
@@ -15,7 +18,7 @@ interface Props {
  *  El elegido va en dorado si acertó (comparado por id, como el scoring); ✓/✗ en
  *  cuanto se conoce el primer gol real (en vivo o finalizado); "+N" solo cuando ya
  *  está puntuado. Un solo componente para Partidos, Pronósticos y el modal de otros. */
-export function FirstGoalLine({ prediction, match, showReal = true }: Props) {
+export function FirstGoalLine({ prediction, match, showReal = true, className }: Props) {
   const { t } = useTranslation();
   const picked   = prediction.first_goal_player;
   const real     = match.first_goal_player;
@@ -26,7 +29,7 @@ export function FirstGoalLine({ prediction, match, showReal = true }: Props) {
   if (!picked && !(showReal && real)) return null;
 
   return (
-    <p className="text-xs text-ucl-silver/50 mt-0.5">
+    <p className={clsx("text-xs text-ucl-silver/50", className ?? "mt-0.5")}>
       ⚽ {t("common.firstGoal")}:{" "}
       {picked
         ? <span className={hit ? "text-ucl-gold font-medium" : "text-ucl-silver/70"}>{picked}</span>
