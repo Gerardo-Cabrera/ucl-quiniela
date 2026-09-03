@@ -42,7 +42,7 @@ function PlayerSelect({
   const [search, setSearch] = useState("");
 
   const q = search.trim().toLowerCase();
-  const matches = q
+  const hits = q
     ? players.filter((p) => p.name.toLowerCase().includes(q)).slice(0, 40)
     : [];
 
@@ -81,9 +81,9 @@ function PlayerSelect({
               className="input-base w-full pl-9"
             />
           </div>
-          {matches.length > 0 && (
+          {hits.length > 0 && (
             <div className="mt-2 space-y-1 max-h-56 overflow-y-auto pr-1">
-              {matches.map((p) => (
+              {hits.map((p) => (
                 <button
                   key={p.api_player_id}
                   onClick={() => { onSelect({ id: p.api_player_id, name: p.name }); setSearch(""); }}

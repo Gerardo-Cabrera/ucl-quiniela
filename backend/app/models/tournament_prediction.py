@@ -7,8 +7,9 @@ from app.database import Base
 
 class TournamentPrediction(Base):
     """Pronóstico global del torneo por usuario (una fila por usuario): MVP y máximo
-    goleador. Se puntúa por id de jugador de API-Football (5 pts por acierto, cada uno).
-    Editable hasta que arranca la fase eliminatoria; el admin fija los reales y calcula.
+    goleador. Se puntúa por id de jugador de API-Football (TOURNAMENT_PICK_POINTS por
+    acierto, cada uno). Editable hasta que arrancan los octavos de final (los play-offs
+    no cierran); el admin fija los reales y calcula.
     """
     __tablename__ = "tournament_predictions"
 

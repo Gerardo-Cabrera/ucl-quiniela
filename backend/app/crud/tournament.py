@@ -35,8 +35,8 @@ class TournamentCRUD:
     async def calculate_all(
         self, db: AsyncSession, mvp_player_id: int, top_scorer_player_id: int
     ) -> dict:
-        """Puntúa a todos: 5 pts si el MVP/goleador pronosticado coincide con el real
-        (por id). Idempotente (reejecutable para corregir)."""
+        """Puntúa a todos: TOURNAMENT_PICK_POINTS por acierto de MVP y de goleador (por
+        id), por separado. Idempotente (reejecutable para corregir)."""
         pts = settings.TOURNAMENT_PICK_POINTS
         rows = list((await db.execute(select(TournamentPrediction))).scalars().all())
         for r in rows:
