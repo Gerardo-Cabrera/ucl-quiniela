@@ -7,5 +7,6 @@ class PlayerOut(BaseModel):
     name: str
     team_name: str
     position: Optional[str] = None
+    photo: Optional[str] = None   # selector visual del primer goleador
 
     model_config = {"from_attributes": True}
