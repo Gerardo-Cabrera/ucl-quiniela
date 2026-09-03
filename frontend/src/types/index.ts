@@ -35,6 +35,7 @@ export interface Match {
   elapsed: number | null;
   first_goal_team: string | null;
   first_goal_player: string | null;
+  first_goal_player_id: number | null;   // acierto del primer gol por id (como el scoring)
   phase: MatchPhase;
   status: MatchStatus;
   match_date: string;
@@ -61,6 +62,7 @@ export interface Prediction {
   first_goal_player_id: number | null;
   first_goal_player: string | null;
   points_earned: number;
+  first_goal_points: number;   // desglose del primer gol (dentro de points_earned)
   is_calculated: boolean;
   match: Match;
 }
@@ -81,6 +83,21 @@ export interface TournamentPick {
   mvp_points: number;
   top_scorer_points: number;
   is_calculated: boolean;
+}
+
+export interface TopPlayer {
+  player_id: number | null;
+  name: string;
+  photo: string | null;
+  team: string | null;
+  goals: number;
+  assists: number;
+  matches: number;
+}
+
+export interface TournamentStats {
+  top_scorers: TopPlayer[];
+  top_assists: TopPlayer[];
 }
 
 export interface LeaderboardEntry {

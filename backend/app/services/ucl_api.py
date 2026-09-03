@@ -70,16 +70,24 @@ STATUS_MAP = {
 }
 
 
+class ApiFootballError(RuntimeError):
+    """API-Football respondió HTTP 200 con `errors` (plan, cuota, parámetros): no hay
+    datos válidos. Se lanza en vez de devolver `[]` para que los jobs no confundan el
+    fallo con "0 resultados" (p. ej. persistir un ranking vacío sobre uno válido, o
+    dar por sincronizados 0 fixtures). La manejan el reintento de `_retry` o el
+    salto por elemento (`_fetch_paced`, `gather(return_exceptions=True)`)."""
+
+
 def _extract_response(data: dict, endpoint: str) -> list[dict]:
     """Extrae 'response' validando el campo 'errors' de API-Football.
 
     API-Football devuelve HTTP 200 incluso cuando no trae datos por un problema
-    de plan, cuota o parámetros: el motivo viaja en 'errors'. Sin esto, esos
-    casos se verían como "0 resultados" sin explicación en los logs.
+    de plan, cuota o parámetros: el motivo viaja en 'errors'. En ese caso se lanza
+    `ApiFootballError`; devolver `[]` se confundiría con una respuesta válida.
     """
     errors = data.get("errors")
     if errors:  # [] cuando no hay error; dict/lista no vacíos si lo hay.
-        logger.warning("API-Football /%s devolvió errores: %s", endpoint, errors)
+        raise ApiFootballError(f"API-Football /{endpoint} devolvió errores: {errors}")
     return data.get("response", [])
 
 
@@ -154,6 +162,38 @@ async def fetch_standings(season: int | None = None) -> list[dict]:
     data = _extract_response(response.json(), "standings")
     groups = ((data[0].get("league") or {}).get("standings") or []) if data else []
     return [row for group in groups for row in group]
+
+
+async def fetch_top_players(kind: str, season: int | None = None) -> list[dict]:
+    """Ranking de jugadores de la temporada: `kind` es `topscorers` o `topassists`
+    (`/players/<kind>?league&season`, hasta 20 jugadores). Cada entrada trae
+    `player{id,name,photo}` y `statistics[0]{team, games, goals{total,assists}}`."""
+    response = await get_client().get(
+        f"{BASE_URL}/players/{kind}",
+        params={
+            "league": settings.UCL_LEAGUE_ID,
+            "season": season or await resolve_season(),
+        },
+    )
+    response.raise_for_status()
+    return _extract_response(response.json(), f"players/{kind}")
+
+
+def parse_top_player(item: dict) -> dict:
+    """Transforma una entrada de `/players/topscorers|topassists` en la fila que
+    muestra la vista Torneo (jugador, equipo, goles, asistencias, partidos)."""
+    player = item.get("player") or {}
+    stats = (item.get("statistics") or [{}])[0]
+    goals = stats.get("goals") or {}
+    return {
+        "player_id": player.get("id"),
+        "name":      player.get("name") or f"#{player.get('id')}",
+        "photo":     player.get("photo"),
+        "team":      (stats.get("team") or {}).get("name"),
+        "goals":     goals.get("total") or 0,
+        "assists":   goals.get("assists") or 0,
+        "matches":   (stats.get("games") or {}).get("appearences") or 0,
+    }
 
 
 def parse_team(team_data: dict) -> dict:

@@ -1,5 +1,7 @@
 import { useMyPredictions, useDeletePrediction } from "@/hooks";
-import { Spinner, EmptyState, PointsChip, Badge } from "@/components/ui";
+import { Spinner, EmptyState, PointsChip, Badge, TeamLogo, DayHeader } from "@/components/ui";
+import { groupByDay } from "@/lib/date";
+import { FirstGoalLine } from "@/components/FirstGoalLine";
 import { Trash2 } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -38,8 +40,12 @@ export default function MyPredictionsPage() {
           description={t("predictions.emptyDescription")}
         />
       ) : (
-        <div className="space-y-3">
-          {predictions.map((pred) => {
+        <div className="space-y-6">
+          {groupByDay(predictions, (p) => p.match.match_date, "desc").map((group) => (
+            <section key={group.day}>
+              <DayHeader date={group.date} />
+              <div className="space-y-3">
+          {group.items.map((pred) => {
             const match = pred.match;
             const isExact =
               pred.is_calculated &&
@@ -50,24 +56,17 @@ export default function MyPredictionsPage() {
               <div
                 key={pred.id}
                 className={clsx(
-                  "card px-5 py-4 flex items-center gap-4",
+                  "card px-5 py-4",
                   isExact && "border-ucl-gold/30 shadow-[0_0_16px_rgba(201,168,76,0.08)]"
                 )}
               >
-                {/* Teams logos */}
-                <div className="flex items-center gap-2 shrink-0">
-                  {match.home_team_logo ? (
-                    <img src={match.home_team_logo} alt="" className="w-7 h-7 object-contain" />
-                  ) : <span>⚽</span>}
-                  {match.away_team_logo ? (
-                    <img src={match.away_team_logo} alt="" className="w-7 h-7 object-contain" />
-                  ) : <span>⚽</span>}
-                </div>
-
-                {/* Match info */}
+                <div className="flex items-center gap-4">
+                {/* Match info: cada escudo junto a su equipo */}
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">
-                    {match.home_team} <span className="text-ucl-silver/40">{t("common.vs")}</span> {match.away_team}
+                  <p className="text-sm font-medium flex items-center gap-1.5 flex-wrap">
+                    <TeamLogo src={match.home_team_logo} className="w-6 h-6" />{match.home_team}
+                    <span className="text-ucl-silver/40">{t("common.vs")}</span>
+                    <TeamLogo src={match.away_team_logo} className="w-6 h-6" />{match.away_team}
                   </p>
                   <div className="flex items-center gap-2 mt-0.5">
                     <span className="text-xs text-ucl-silver/50 font-mono">
@@ -110,9 +109,15 @@ export default function MyPredictionsPage() {
                     <span className="text-xs text-ucl-silver/40 font-mono">—</span>
                   )}
                 </div>
+                </div>
+                {/* Primer gol en su propia fila a todo el ancho: etiquetas completas sin recortar. */}
+                <FirstGoalLine prediction={pred} match={match} className="mt-3" />
               </div>
             );
           })}
+              </div>
+            </section>
+          ))}
         </div>
       )}
     </div>

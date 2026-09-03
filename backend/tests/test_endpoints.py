@@ -621,6 +621,8 @@ async def test_prediction_create_success(auth_client: AsyncClient):
     assert data["first_goal_player_id"] == 10
     assert data["first_goal_player"] == "Vinicius Jr"
     assert data["is_calculated"] is False
+    assert "first_goal_player_id" in data["match"]   # la tarjeta marca el acierto por id
+    assert data["first_goal_points"] == 0
 
 
 @pytest.mark.asyncio
@@ -715,6 +717,13 @@ async def test_tournament_players_list(auth_client: AsyncClient):
     assert len(data) == 4  # sembrados en conftest
     names = {p["name"] for p in data}
     assert {"Vinicius Jr", "Bellingham", "Lewandowski", "Lamine Yamal"} == names
+
+
+@pytest.mark.asyncio
+async def test_tournament_stats_empty_until_synced(auth_client: AsyncClient):
+    resp = await auth_client.get("/api/tournament/stats")
+    assert resp.status_code == 200
+    assert resp.json() == {"top_scorers": [], "top_assists": []}
 
 
 @pytest.mark.asyncio

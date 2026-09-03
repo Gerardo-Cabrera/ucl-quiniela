@@ -2,6 +2,7 @@ import { type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { clsx } from "clsx";
 import type { MatchStatus } from "@/types";
+import { formatDayHeading } from "@/lib/date";
 
 // ── CARD ──────────────────────────────────────────────────────────────────────
 
@@ -155,4 +156,24 @@ export function StatusDot({ status }: { status: MatchStatus }) {
     postponed: "text-yellow-500/70",
   };
   return <span className={clsx("text-xs", styles[status])}>{t(`status.${status}`)}</span>;
+}
+
+/** Escudo de un equipo (o balón si aún no hay logo), al tamaño que indique className. */
+export function TeamLogo({ src, alt = "", className = "w-6 h-6" }: {
+  src: string | null;
+  alt?: string;
+  className?: string;
+}) {
+  return src
+    ? <img src={src} alt={alt} className={clsx("object-contain shrink-0", className)} />
+    : <span className={clsx("rounded-full bg-ucl-blue/50 flex items-center justify-center shrink-0", className)}>⚽</span>;
+}
+
+/** Cabecera de fecha que agrupa tarjetas por día (Partidos y Mis Pronósticos). */
+export function DayHeader({ date }: { date: Date }) {
+  return (
+    <h2 className="font-display text-xl text-ucl-gold/90 border-b border-ucl-blue/30 pb-1 mb-3">
+      {formatDayHeading(date)}
+    </h2>
+  );
 }

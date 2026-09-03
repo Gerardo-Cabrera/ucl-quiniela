@@ -34,5 +34,18 @@ class AppStateCRUD:
         state.top8_actual = list(teams)
         await db.flush()
 
+    async def get_tournament_stats(self, db: AsyncSession) -> dict[str, list[dict]]:
+        """Rankings de goleadores y asistidores (listas vacías hasta el primer sync)."""
+        state = await self.get(db)
+        return {"top_scorers": state.top_scorers or [], "top_assists": state.top_assists or []}
+
+    async def set_tournament_stats(
+        self, db: AsyncSession, scorers: list[dict], assists: list[dict]
+    ) -> None:
+        state = await self.get(db)
+        state.top_scorers = scorers
+        state.top_assists = assists
+        await db.flush()
+
 
 app_state_crud = AppStateCRUD()

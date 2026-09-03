@@ -5,7 +5,8 @@ import { es } from "date-fns/locale";
 import { useTranslation } from "react-i18next";
 import { useUserPredictions, useUserTop8, useUserTournament, useActualTop8 } from "@/hooks";
 import { top8Hits } from "@/lib/top8";
-import { Spinner, EmptyState, PointsChip, Badge } from "@/components/ui";
+import { Spinner, EmptyState, PointsChip, Badge, TeamLogo } from "@/components/ui";
+import { FirstGoalLine } from "@/components/FirstGoalLine";
 import { clsx } from "clsx";
 
 interface Props {
@@ -119,24 +120,17 @@ export function UserPredictionsModal({ userId, teamName, onClose }: Props) {
                 <div
                   key={pred.id}
                   className={clsx(
-                    "card px-4 py-3 flex items-center gap-3",
+                    "card px-4 py-3",
                     isExact && "border-ucl-gold/30 shadow-[0_0_16px_rgba(201,168,76,0.08)]"
                   )}
                 >
-                  {/* Teams logos */}
-                  <div className="flex items-center gap-2 shrink-0">
-                    {match.home_team_logo ? (
-                      <img src={match.home_team_logo} alt="" className="w-6 h-6 object-contain" />
-                    ) : <span>⚽</span>}
-                    {match.away_team_logo ? (
-                      <img src={match.away_team_logo} alt="" className="w-6 h-6 object-contain" />
-                    ) : <span>⚽</span>}
-                  </div>
-
-                  {/* Match info */}
+                  <div className="flex items-center gap-3">
+                  {/* Match info: cada escudo junto a su equipo */}
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">
-                      {match.home_team} <span className="text-ucl-silver/40">{t("common.vs")}</span> {match.away_team}
+                    <p className="text-sm font-medium flex items-center gap-1.5 flex-wrap">
+                      <TeamLogo src={match.home_team_logo} className="w-5 h-5" />{match.home_team}
+                      <span className="text-ucl-silver/40">{t("common.vs")}</span>
+                      <TeamLogo src={match.away_team_logo} className="w-5 h-5" />{match.away_team}
                     </p>
                     <div className="flex items-center gap-2 mt-0.5">
                       <span className="text-xs text-ucl-silver/50 font-mono">
@@ -169,6 +163,9 @@ export function UserPredictionsModal({ userId, teamName, onClose }: Props) {
                       <PointsChip points={pred.points_earned} />
                     </div>
                   )}
+                  </div>
+                  {/* Primer gol en su propia fila a todo el ancho: etiquetas completas sin recortar. */}
+                  <FirstGoalLine prediction={pred} match={match} className="mt-3" />
                 </div>
               );
             })}

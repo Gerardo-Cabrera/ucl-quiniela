@@ -3,7 +3,8 @@ import { es } from "date-fns/locale";
 import { Pencil } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { Match, Prediction } from "@/types";
-import { Badge, StatusDot, PointsChip } from "@/components/ui";
+import { Badge, StatusDot, PointsChip, TeamLogo } from "@/components/ui";
+import { FirstGoalLine } from "@/components/FirstGoalLine";
 import { clsx } from "clsx";
 
 interface MatchCardProps {
@@ -43,11 +44,7 @@ export function MatchCard({ match, prediction, onPredict }: MatchCardProps) {
       <div className="flex items-center gap-3 mb-4">
         {/* Home */}
         <div className="flex-1 flex flex-col items-center gap-2">
-          {match.home_team_logo ? (
-            <img src={match.home_team_logo} alt={match.home_team} className="w-10 h-10 object-contain" />
-          ) : (
-            <div className="w-10 h-10 rounded-full bg-ucl-blue/50 flex items-center justify-center text-lg">⚽</div>
-          )}
+          <TeamLogo src={match.home_team_logo} alt={match.home_team} className="w-10 h-10 text-lg" />
           <span className="text-sm text-center font-medium leading-tight">{match.home_team}</span>
         </div>
 
@@ -78,24 +75,32 @@ export function MatchCard({ match, prediction, onPredict }: MatchCardProps) {
 
         {/* Away */}
         <div className="flex-1 flex flex-col items-center gap-2">
-          {match.away_team_logo ? (
-            <img src={match.away_team_logo} alt={match.away_team} className="w-10 h-10 object-contain" />
-          ) : (
-            <div className="w-10 h-10 rounded-full bg-ucl-blue/50 flex items-center justify-center text-lg">⚽</div>
-          )}
+          <TeamLogo src={match.away_team_logo} alt={match.away_team} className="w-10 h-10 text-lg" />
           <span className="text-sm text-center font-medium leading-tight">{match.away_team}</span>
         </div>
       </div>
 
+      {/* Primer goleador real: en cuanto se conoce (en vivo o finalizado), para todos,
+          tengan o no pronóstico. */}
+      {match.first_goal_player && (
+        <div className="-mt-2 mb-4 flex items-center justify-center gap-1.5 text-xs">
+          <span className="text-ucl-silver/50">⚽ {t("common.firstGoalReal")}:</span>
+          <span className="font-medium text-ucl-white">{match.first_goal_player}</span>
+        </div>
+      )}
+
       {/* Prediction row */}
       {prediction ? (
         <div className="mt-auto pt-3 border-t border-ucl-blue/30 flex items-center justify-between">
-          <div className="flex items-center gap-2 text-sm">
-            <span className="text-ucl-silver/60 text-xs">{t("matchCard.yourPrediction")}</span>
-            <span className={clsx("font-mono font-bold", hasExact ? "text-ucl-gold" : "text-ucl-white")}>
-              {prediction.predicted_home} - {prediction.predicted_away}
-            </span>
-            {hasExact && <span className="text-xs text-ucl-gold">{t("matchCard.exact")}</span>}
+          <div className="text-sm">
+            <div className="flex items-center gap-2">
+              <span className="text-ucl-silver/60 text-xs">{t("matchCard.yourPrediction")}</span>
+              <span className={clsx("font-mono font-bold", hasExact ? "text-ucl-gold" : "text-ucl-white")}>
+                {prediction.predicted_home} - {prediction.predicted_away}
+              </span>
+              {hasExact && <span className="text-xs text-ucl-gold">{t("matchCard.exact")}</span>}
+            </div>
+            <FirstGoalLine prediction={prediction} match={match} showReal={false} />
           </div>
           <div className="flex items-center gap-2">
             {prediction.is_calculated && <PointsChip points={prediction.points_earned} />}

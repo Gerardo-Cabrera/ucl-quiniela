@@ -53,6 +53,9 @@ class Settings(BaseSettings):
     # en el despliegue, no en una tarea en background que ya devolvió 202).
     API_REQUESTS_PER_MINUTE: int = Field(default=30, gt=0)
     CALC_POINTS_MINUTES: int = 30
+    # Rankings de goleadores/asistidores (vista Torneo): refresco diario; además se
+    # refrescan al terminar cada partido (ver sync_fixtures).
+    SYNC_STATS_HOURS: int = 24
     # Fallback: si un partido de fase de liga sigue LIVE pasados estos minutos desde
     # el kickoff, se da por finalizado (135 = 90' + descanso + añadido + margen). No
     # aplica a eliminatorias (prórroga/penales pueden superarlo).
