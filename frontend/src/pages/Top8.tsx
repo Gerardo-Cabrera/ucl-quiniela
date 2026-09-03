@@ -161,15 +161,15 @@ export default function Top8Page() {
   const locked        = calculated || seasonStarted;
 
   // ── Torneo: MVP y máximo goleador ──
-  // Cierre distinto al Top 8: editables hasta que arranca la eliminatoria (primer
-  // partido de fase ≠ league) o tras calcularse. El backend aplica la misma regla.
+  // Cierre distinto al Top 8: editables hasta que arrancan los octavos de final
+  // (los play-offs no cierran) o tras calcularse. El backend aplica la misma regla.
   const { data: tournament } = useMyTournament();
   const { mutate: saveTournament, isPending: tourSaving, isSuccess: tourSaved, reset: tourReset } = useSaveTournament();
   const tourCalculated  = tournament?.is_calculated ?? false;
-  const knockoutStarted = (matches ?? []).some(
-    (m) => m.phase !== "league" && Date.parse(m.match_date) <= Date.now(),
+  const r16Started = (matches ?? []).some(
+    (m) => m.phase !== "league" && m.phase !== "knockout_playoffs" && Date.parse(m.match_date) <= Date.now(),
   );
-  const tourLocked = tourCalculated || knockoutStarted;
+  const tourLocked = tourCalculated || r16Started;
   const { data: players } = useTournamentPlayers(!tourLocked);
 
   const [mvp, setMvp]       = useState<PlayerRef | null>(null);
@@ -414,7 +414,7 @@ export default function Top8Page() {
 
         {tourLocked && (
           <div className="mt-4 bg-ucl-gold/10 border border-ucl-gold/20 rounded-lg px-4 py-3 text-sm text-ucl-gold/80">
-            {tourCalculated ? t("tournament.locked") : t("tournament.lockedKnockout")}
+            {tourCalculated ? t("tournament.locked") : t("tournament.lockedRound16")}
           </div>
         )}
       </div>

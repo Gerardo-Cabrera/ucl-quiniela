@@ -48,9 +48,9 @@ async def get_user_tournament(
     db: AsyncSession = Depends(get_db),
     _: User = Depends(get_current_user),
 ):
-    """MVP/máximo goleador de otro participante, revelado una vez que **arranca la
-    fase eliminatoria** (mismo cierre que la edición). Antes, nada (null)."""
-    if not await match_crud.knockout_started(db):
+    """MVP/máximo goleador de otro participante, revelado una vez que **arrancan los
+    octavos de final** (mismo cierre que la edición). Antes, nada (null)."""
+    if not await match_crud.round_of_16_started(db):
         return None
     return await tournament_crud.get_by_user(db, user_id)
 
@@ -62,11 +62,11 @@ async def save_tournament(
     current_user: User = Depends(get_current_user),
 ):
     """Fija/actualiza mi MVP y máximo goleador. Editable hasta que arranca el primer
-    partido de eliminatoria; luego queda cerrado."""
-    if await match_crud.knockout_started(db):
+    partido de octavos de final (los play-offs no cierran); luego queda cerrado."""
+    if await match_crud.round_of_16_started(db):
         raise HTTPException(
             status_code=400,
-            detail="El MVP y el máximo goleador solo se pueden definir antes de la fase eliminatoria.",
+            detail="El MVP y el máximo goleador solo se pueden definir antes de los octavos de final.",
         )
     mvp_id, mvp_name = await _resolve_player(db, data.mvp_player_id)
     scorer_id, scorer_name = await _resolve_player(db, data.top_scorer_player_id)

@@ -130,7 +130,7 @@
     "tournamentTitle": "MVP y máximo goleador",
     "predictionsTitle": "Pronósticos",
     "emptyTitle": "Aún no hay nada visible",
-    "emptyDescription": "El Top 8 se revela al arrancar la temporada y los pronósticos de cada jornada al empezar su primer partido."
+    "emptyDescription": "El Top 8 se revela al arrancar la temporada, el MVP y máximo goleador al empezar los octavos de final, y los pronósticos de cada jornada al empezar su primer partido."
   },
   "predictionModal": {
     "titleEdit": "Editar Pronóstico",
@@ -166,7 +166,7 @@
     "pageTitle": "Predicciones del torneo",
     "pageSubtitle": "Tu Top 8, tu MVP y tu máximo goleador del torneo",
     "title": "MVP y máximo goleador",
-    "subtitle": "Elige al MVP y al máximo goleador del torneo (5 pts por acierto). Editable hasta que arranca la eliminatoria.",
+    "subtitle": "Elige al MVP y al máximo goleador del torneo (10 pts por acierto). Editable hasta que arrancan los octavos de final.",
     "pts": "PTS TORNEO",
     "mvp": "MVP",
     "topScorer": "Máximo goleador",
@@ -176,7 +176,7 @@
     "saving": "Guardando...",
     "saved": "Guardado",
     "locked": "🔒 Tu MVP y máximo goleador ya fueron calculados y no pueden modificarse.",
-    "lockedKnockout": "🔒 La eliminatoria ya comenzó: tu MVP y máximo goleador son inmodificables."
+    "lockedRound16": "🔒 Los octavos de final ya comenzaron: tu MVP y máximo goleador son inmodificables."
   },
   "aciertos": {
     "title": "Aciertos",

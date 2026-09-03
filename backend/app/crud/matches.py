@@ -61,13 +61,15 @@ class MatchCRUD:
         first = (await db.execute(select(func.min(Match.match_date)))).scalar()
         return first is not None and as_utc(first) <= datetime.now(timezone.utc)
 
-    async def knockout_started(self, db: AsyncSession) -> bool:
-        """True si arrancó el primer partido de ELIMINATORIA (fase != league). Cierre
-        del MVP y el máximo goleador: editables durante la fase de liga, se fijan al
-        empezar la eliminatoria. Antes de eso (o sin fixtures de eliminatoria) es
-        editable. Una sola consulta agregada."""
+    async def round_of_16_started(self, db: AsyncSession) -> bool:
+        """True si arrancó el primer partido de OCTAVOS de final (o de una fase
+        posterior). Cierre del MVP y el máximo goleador: editables durante la fase de
+        liga y los play-offs, se fijan al empezar los octavos. Antes de eso (o sin
+        esos fixtures) es editable. Una sola consulta agregada."""
         first = (await db.execute(
-            select(func.min(Match.match_date)).where(Match.phase != MatchPhase.LEAGUE)
+            select(func.min(Match.match_date)).where(
+                Match.phase.not_in([MatchPhase.LEAGUE, MatchPhase.KNOCKOUT_PLAYOFFS])
+            )
         )).scalar()
         return first is not None and as_utc(first) <= datetime.now(timezone.utc)
 

@@ -72,7 +72,7 @@ class Settings(BaseSettings):
 
     # Game rules
     TOP8_PICK_COUNT: int = 8
-    TOURNAMENT_PICK_POINTS: int = 5   # puntos por acertar MVP / máximo goleador (cada uno)
+    TOURNAMENT_PICK_POINTS: int = 10  # puntos por acertar MVP / máximo goleador (cada uno)
 
     # App
     APP_ENV: str = "development"
