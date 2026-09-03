@@ -6,8 +6,8 @@
     "dash": "—",
     "close": "Cerrar",
     "errorGeneric": "No se pudo completar la acción. Intenta de nuevo.",
-    "firstGoalPick": "⚽ {{player}}",
-    "firstGoalReal": "Real: ⚽ {{player}}"
+    "noScorer": "sin goleador",
+    "realScorer": " · real: {{name}}"
   },
   "brand": {
     "name": "UCL",
@@ -112,6 +112,7 @@
   },
   "matchCard": {
     "yourPrediction": "Tu pronóstico:",
+    "firstGoalLabel": "Primer gol:",
     "exact": "✓ Exacto",
     "predict": "Pronosticar",
     "editPrediction": "Editar pronóstico",

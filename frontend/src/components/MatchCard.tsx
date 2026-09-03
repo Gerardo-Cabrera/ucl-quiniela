@@ -88,6 +88,15 @@ export function MatchCard({ match, prediction, onPredict }: MatchCardProps) {
         </div>
       </div>
 
+      {/* Primer goleador real: en cuanto se conoce (en vivo o finalizado), para todos,
+          tengan o no pronóstico. */}
+      {match.first_goal_player && (
+        <div className="-mt-2 mb-4 flex items-center justify-center gap-1.5 text-xs">
+          <span className="text-ucl-silver/50">⚽ {t("matchCard.firstGoalLabel")}</span>
+          <span className="font-medium text-ucl-white">{match.first_goal_player}</span>
+        </div>
+      )}
+
       {/* Prediction row */}
       {prediction ? (
         <div className="mt-auto pt-3 border-t border-ucl-blue/30 flex items-center justify-between">
@@ -99,7 +108,7 @@ export function MatchCard({ match, prediction, onPredict }: MatchCardProps) {
               </span>
               {hasExact && <span className="text-xs text-ucl-gold">{t("matchCard.exact")}</span>}
             </div>
-            <FirstGoalLine prediction={prediction} match={match} />
+            <FirstGoalLine prediction={prediction} match={match} showReal={false} />
           </div>
           <div className="flex items-center gap-2">
             {prediction.is_calculated && <PointsChip points={prediction.points_earned} />}
