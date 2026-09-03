@@ -1,5 +1,6 @@
 import { useMyPredictions, useDeletePrediction } from "@/hooks";
 import { Spinner, EmptyState, PointsChip, Badge } from "@/components/ui";
+import { FirstGoalLine } from "@/components/FirstGoalLine";
 import { Trash2 } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -87,11 +88,7 @@ export default function MyPredictionsPage() {
                   )}>
                     {pred.predicted_home} - {pred.predicted_away}
                   </p>
-                  {pred.first_goal_player && (
-                    <p className="text-xs text-ucl-silver/60">
-                      {t("common.firstGoalPick", { player: pred.first_goal_player })}
-                    </p>
-                  )}
+                  <FirstGoalLine prediction={pred} match={match} />
                   {match.status === "finished" && (
                     <p className="text-xs text-ucl-silver/50 font-mono">
                       {t("predictions.real", { home: match.home_score, away: match.away_score })}

@@ -6,7 +6,8 @@
     "dash": "—",
     "close": "Cerrar",
     "errorGeneric": "No se pudo completar la acción. Intenta de nuevo.",
-    "firstGoalPick": "⚽ {{player}}"
+    "firstGoalPick": "⚽ {{player}}",
+    "firstGoalReal": "Real: ⚽ {{player}}"
   },
   "brand": {
     "name": "UCL",

@@ -107,14 +107,21 @@ export function PredictionModal({ match, prediction, onClose }: Props) {
               className="input-base w-full"
             >
               <option value="">{t("predictionModal.noPrediction")}</option>
-              {squad.map((g) => (
-                <optgroup
-                  key={`${g.team}-${g.position}`}
-                  label={`${g.team} · ${t(`position.${g.position || "unknown"}`)}`}
-                >
-                  {g.players.map((p) => (
-                    <option key={p.api_player_id} value={p.api_player_id}>{p.name}</option>
-                  ))}
+              {/* Un optgroup por equipo; dentro, cada posición como cabecera no
+                  seleccionable y sus jugadores sangrados (el select nativo solo
+                  admite un nivel de grupo). */}
+              {squad.map((team) => (
+                <optgroup key={team.team} label={team.team}>
+                  {team.positions.flatMap((g) => [
+                    <option key={`pos-${g.position}`} disabled>
+                      {t(`position.${g.position || "unknown"}`)}
+                    </option>,
+                    ...g.players.map((p) => (
+                      <option key={p.api_player_id} value={p.api_player_id}>
+                        {"\u00A0\u00A0"}{p.name}
+                      </option>
+                    )),
+                  ])}
                 </optgroup>
               ))}
             </select>

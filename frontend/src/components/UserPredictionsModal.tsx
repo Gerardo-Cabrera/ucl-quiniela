@@ -6,6 +6,7 @@ import { useTranslation } from "react-i18next";
 import { useUserPredictions, useUserTop8, useUserTournament, useActualTop8 } from "@/hooks";
 import { top8Hits } from "@/lib/top8";
 import { Spinner, EmptyState, PointsChip, Badge } from "@/components/ui";
+import { FirstGoalLine } from "@/components/FirstGoalLine";
 import { clsx } from "clsx";
 
 interface Props {
@@ -156,11 +157,7 @@ export function UserPredictionsModal({ userId, teamName, onClose }: Props) {
                     )}>
                       {pred.predicted_home} - {pred.predicted_away}
                     </p>
-                    {pred.first_goal_player && (
-                      <p className="text-xs text-ucl-silver/60">
-                        {t("common.firstGoalPick", { player: pred.first_goal_player })}
-                      </p>
-                    )}
+                    <FirstGoalLine prediction={pred} match={match} />
                     {match.status === "finished" && (
                       <p className="text-xs text-ucl-silver/50 font-mono">
                         {t("predictions.real", { home: match.home_score, away: match.away_score })}

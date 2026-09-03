@@ -18,6 +18,8 @@ class MatchOut(BaseModel):
     elapsed: Optional[int]
     first_goal_team: Optional[str]
     first_goal_player: Optional[str]
+    # id del goleador real: la tarjeta marca el acierto del primer gol por id (como el scoring).
+    first_goal_player_id: Optional[int] = None
     phase: MatchPhase
     status: MatchStatus
     match_date: datetime

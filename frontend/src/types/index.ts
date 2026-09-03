@@ -35,6 +35,7 @@ export interface Match {
   elapsed: number | null;
   first_goal_team: string | null;
   first_goal_player: string | null;
+  first_goal_player_id: number | null;   // acierto del primer gol por id (como el scoring)
   phase: MatchPhase;
   status: MatchStatus;
   match_date: string;

@@ -4,6 +4,7 @@ import { Pencil } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { Match, Prediction } from "@/types";
 import { Badge, StatusDot, PointsChip } from "@/components/ui";
+import { FirstGoalLine } from "@/components/FirstGoalLine";
 import { clsx } from "clsx";
 
 interface MatchCardProps {
@@ -98,11 +99,7 @@ export function MatchCard({ match, prediction, onPredict }: MatchCardProps) {
               </span>
               {hasExact && <span className="text-xs text-ucl-gold">{t("matchCard.exact")}</span>}
             </div>
-            {prediction.first_goal_player && (
-              <p className="text-xs text-ucl-silver/60 mt-0.5">
-                {t("common.firstGoalPick", { player: prediction.first_goal_player })}
-              </p>
-            )}
+            <FirstGoalLine prediction={prediction} match={match} />
           </div>
           <div className="flex items-center gap-2">
             {prediction.is_calculated && <PointsChip points={prediction.points_earned} />}
