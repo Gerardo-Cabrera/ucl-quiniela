@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Trophy, Target, Star, Award, ListChecks, Share2 } from "lucide-react";
+import { Trophy, Star, Award, ListChecks, Share2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useLeaderboard } from "@/hooks";
 import { Card, Spinner, EmptyState } from "@/components/ui";
@@ -32,6 +32,11 @@ export default function Dashboard() {
   }
 
   const myEntry = leaderboard.find((e) => e.team_name === user?.team_name);
+  // Los puntos de Top 8 y torneo solo se muestran cuando ya se calcularon: antes
+  // serían 0 para todos y se leerían como "no especificado". Hasta entonces la
+  // columna del Top 8 indica si ya se eligió.
+  const anyTop8Calculated = leaderboard.some((e) => e.top8_calculated);
+  const anyTournamentCalculated = leaderboard.some((e) => e.tournament_calculated);
 
   // Comparte la tabla como texto: WhatsApp (u otra app) se abre con el mensaje
   // pre-cargado y el usuario elige el grupo. Reutiliza los datos ya mostrados.
@@ -123,17 +128,23 @@ export default function Dashboard() {
                 {/* Points breakdown */}
                 <div className="hidden sm:flex items-center gap-3 text-xs text-ucl-silver/60 font-mono">
                   <span title={t("dashboard.legendPredictions")}><ListChecks size={11} className="inline mr-0.5" />{entry.predictions_count}</span>
-                  <span title={t("dashboard.legendMatches")}><Target size={11} className="inline mr-0.5" />{entry.match_points}</span>
-                  <span title={t("dashboard.legendTop8")}><Star size={11} className="inline mr-0.5" />{entry.top8_points}</span>
-                  <span title={t("dashboard.legendTournament")}><Award size={11} className="inline mr-0.5" />{entry.tournament_points}</span>
+                  {entry.top8_calculated ? (
+                    <span title={t("dashboard.legendTop8")}><Star size={11} className="inline mr-0.5" />{entry.top8_points}</span>
+                  ) : (
+                    <span title={t("dashboard.legendTop8Chosen")}><Star size={11} className="inline mr-0.5" />{entry.has_top8 ? "✓" : "—"}</span>
+                  )}
+                  {entry.tournament_calculated && (
+                    <span title={t("dashboard.legendTournament")}><Award size={11} className="inline mr-0.5" />{entry.tournament_points}</span>
+                  )}
                 </div>
 
                 {/* Total */}
                 <span className={clsx(
-                  "font-display text-2xl w-14 text-right shrink-0",
+                  "font-display text-2xl w-16 text-right shrink-0",
                   isMe ? "text-ucl-gold" : "text-ucl-white"
                 )}>
                   {entry.total_points}
+                  <span className="ml-1 text-[10px] font-sans text-ucl-silver/50">{t("common.pts")}</span>
                 </span>
               </button>
             );
@@ -143,9 +154,8 @@ export default function Dashboard() {
         {/* Legend */}
         <div className="mt-4 pt-4 border-t border-ucl-blue/30 flex items-center gap-4 flex-wrap text-xs text-ucl-silver/50 font-mono">
           <span><ListChecks size={11} className="inline mr-1" />{t("dashboard.legendPredictions")}</span>
-          <span><Target size={11} className="inline mr-1" />{t("dashboard.legendMatches")}</span>
-          <span><Star size={11} className="inline mr-1" />{t("dashboard.legendTop8")}</span>
-          <span><Award size={11} className="inline mr-1" />{t("dashboard.legendTournament")}</span>
+          <span><Star size={11} className="inline mr-1" />{anyTop8Calculated ? t("dashboard.legendTop8") : t("dashboard.legendTop8Chosen")}</span>
+          {anyTournamentCalculated && <span><Award size={11} className="inline mr-1" />{t("dashboard.legendTournament")}</span>}
         </div>
       </Card>
 

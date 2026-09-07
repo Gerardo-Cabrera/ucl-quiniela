@@ -233,6 +233,20 @@ async def fetch_squad(team_api_id: int) -> list[dict]:
     return _extract_response(response.json(), "players/squads")
 
 
+async def fetch_current_team(player_id: int) -> int | None:
+    """Club actual de un jugador según su ÚLTIMO traspaso (`/transfers?player`).
+    Resuelve al jugador que la API lista en DOS plantillas tras un traspaso (tarda
+    en retirarlo del club anterior). None si no hay traspasos registrados."""
+    response = await get_client().get(f"{BASE_URL}/transfers", params={"player": player_id})
+    response.raise_for_status()
+    data = _extract_response(response.json(), "transfers")
+    transfers = [t for item in data for t in (item.get("transfers") or []) if t.get("date")]
+    if not transfers:
+        return None
+    latest = max(transfers, key=lambda t: t["date"])   # fechas "YYYY-MM-DD"
+    return ((latest.get("teams") or {}).get("in") or {}).get("id")
+
+
 def parse_squad(squad_data: dict) -> list[dict]:
     """Transforma una entrada de `/players/squads` en filas de la tabla `players`.
 

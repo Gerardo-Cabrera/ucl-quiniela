@@ -235,6 +235,39 @@ async def _fetch_paced(fetch, keys: list) -> list:
 _SHORT_SQUAD = 18
 
 
+async def _resolve_double_listed(parsed: list[dict]) -> list[dict]:
+    """Un jugador listado en DOS plantillas (traspaso reciente que la API aún no
+    retiró del club anterior): sin esto "ganaría" el último equipo procesado por
+    orden de id, no el club actual. Se asigna al club de su último traspaso
+    (`/transfers`, una petición por caso; son pocos). Si no se puede resolver, se
+    conserva la primera plantilla en que aparece y se avisa."""
+    by_player: dict[int, list[dict]] = {}
+    for row in parsed:
+        by_player.setdefault(row["api_player_id"], []).append(row)
+    conflicts = {pid: rows for pid, rows in by_player.items() if len(rows) > 1}
+    if not conflicts:
+        return parsed
+
+    currents = await _fetch_paced(ucl_api.fetch_current_team, list(conflicts))
+    drop: set[int] = set()   # id() de las filas descartadas
+    for (pid, rows), current in zip(conflicts.items(), currents):
+        teams = [r["team_api_id"] for r in rows]
+        keep = next((r for r in rows if r["team_api_id"] == current), None)
+        if keep is None:
+            keep = rows[0]
+            logger.warning(
+                "Jugador %s (%s) listado en las plantillas %s y sin traspaso resoluble (%s): "
+                "se conserva en el equipo %s.", pid, keep["name"], teams, current, keep["team_api_id"],
+            )
+        else:
+            logger.info(
+                "Jugador %s (%s) listado en las plantillas %s: se asigna a %s por su último traspaso.",
+                pid, keep["name"], teams, keep["team_api_id"],
+            )
+        drop.update(id(r) for r in rows if r is not keep)
+    return [r for r in parsed if id(r) not in drop]
+
+
 async def _do_sync_players():
     # Una petición /players/squads por equipo VIVO (con partidos pendientes),
     # espaciadas para respetar el límite por minuto del plan.
@@ -262,6 +295,8 @@ async def _do_sync_players():
         # quede en el log con el equipo (no es un fallo del sync).
         if len(rows) < _SHORT_SQUAD:
             logger.warning("Plantilla corta para el equipo %s: %d jugadores (la API no entrega más).", team_api_id, len(rows))
+
+    parsed = await _resolve_double_listed(parsed)
 
     async with AsyncSessionLocal() as db:
         count = await player_crud.upsert_many(db, parsed)

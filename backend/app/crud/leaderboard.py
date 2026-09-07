@@ -23,6 +23,8 @@ class LeaderboardCRUD:
             select(
                 Top8Pick.user_id,
                 func.coalesce(func.sum(Top8Pick.points_earned), 0).label("top8_points"),
+                func.count(Top8Pick.id).label("top8_count"),
+                func.count(Top8Pick.id).filter(Top8Pick.is_calculated == True).label("top8_calculated_count"),  # noqa: E712
             )
             .group_by(Top8Pick.user_id)
             .subquery()
@@ -36,6 +38,7 @@ class LeaderboardCRUD:
                     func.coalesce(TournamentPrediction.mvp_points, 0)
                     + func.coalesce(TournamentPrediction.top_scorer_points, 0)
                 ).label("tournament_points"),
+                TournamentPrediction.is_calculated.label("tournament_calculated"),
             )
             .subquery()
         )
@@ -55,6 +58,9 @@ class LeaderboardCRUD:
                 func.coalesce(match_pts_q.c.match_points, 0).label("match_points"),
                 func.coalesce(top8_pts_q.c.top8_points, 0).label("top8_points"),
                 func.coalesce(tournament_pts_q.c.tournament_points, 0).label("tournament_points"),
+                func.coalesce(top8_pts_q.c.top8_count, 0).label("top8_count"),
+                func.coalesce(top8_pts_q.c.top8_calculated_count, 0).label("top8_calculated_count"),
+                func.coalesce(tournament_pts_q.c.tournament_calculated, False).label("tournament_calculated"),
                 func.coalesce(match_pts_q.c.predictions_count, 0).label("predictions_count"),
                 total_expr.label("total_points"),
             )
@@ -88,6 +94,9 @@ class LeaderboardCRUD:
                     match_points=row.match_points,
                     top8_points=row.top8_points,
                     tournament_points=row.tournament_points,
+                    has_top8=row.top8_count > 0,
+                    top8_calculated=row.top8_calculated_count > 0,
+                    tournament_calculated=bool(row.tournament_calculated),
                     predictions_count=row.predictions_count,
                 )
             )

@@ -109,6 +109,9 @@ export interface LeaderboardEntry {
   match_points: number;
   top8_points: number;
   tournament_points: number;   // MVP + máximo goleador
+  has_top8: boolean;             // ya eligió su Top 8
+  top8_calculated: boolean;      // su Top 8 ya fue puntuado
+  tournament_calculated: boolean;
   predictions_count: number;
 }
 

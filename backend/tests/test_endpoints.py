@@ -384,6 +384,7 @@ async def test_leaderboard(auth_client: AsyncClient):
     assert isinstance(data, list)
     assert len(data) >= 1
     assert data[0]["team_name"] == "Jax FC"
+    assert (data[0]["has_top8"], data[0]["top8_calculated"], data[0]["tournament_calculated"]) == (False, False, False)
 
 
 @pytest.mark.asyncio
@@ -551,6 +552,9 @@ async def test_top8_calculate_scores_picks(admin_client: AsyncClient):
     assert sum(p["points_earned"] for p in picks) == 35
     # Queda constancia del Top 8 real con el que se puntuó.
     assert (await admin_client.get("/api/top8/actual")).json() == VALID_TOP8
+    # La tabla general sabe que eligió Top 8 y que ya está puntuado.
+    me = next(e for e in (await admin_client.get("/api/leaderboard/")).json() if e["user_id"] == 1)
+    assert me["has_top8"] is True and me["top8_calculated"] is True and me["top8_points"] == 35
 
     # Una vez calculado, el Top 8 queda bloqueado.
     resp = await admin_client.post("/api/top8/", json=_picks_payload(VALID_TOP8))
@@ -862,6 +866,7 @@ async def test_leaderboard_includes_tournament_points(admin_client: AsyncClient)
     me = next(e for e in data if e["user_id"] == 1)
     assert me["tournament_points"] == 20
     assert me["total_points"] == 20
+    assert me["tournament_calculated"] is True
 
 
 # ── ADMIN: SYNC DE PLANTILLAS ────────────────────────────────────────────────
