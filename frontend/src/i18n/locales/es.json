@@ -2,7 +2,7 @@
   "common": {
     "loading": "Cargando...",
     "vs": "vs",
-    "pts": "pts",
+    "pts": "PTS",
     "dash": "—",
     "close": "Cerrar",
     "errorGeneric": "No se pudo completar la acción. Intenta de nuevo.",
@@ -82,7 +82,7 @@
     "shareTitle": "UCL Quiniela · Tabla General",
     "you": "(tú)",
     "legendPredictions": "Pronósticos hechos",
-    "legendTop8Chosen": "Top 8 elegido (✓)",
+    "legendTop8Chosen": "Top 8 elegido ({{mark}})",
     "legendTop8": "Pts Top 8",
     "legendTournament": "Pts torneo",
     "viewPredictions": "Ver pronósticos",

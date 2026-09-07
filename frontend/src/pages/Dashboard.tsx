@@ -131,7 +131,9 @@ export default function Dashboard() {
                   {entry.top8_calculated ? (
                     <span title={t("dashboard.legendTop8")}><Star size={11} className="inline mr-0.5" />{entry.top8_points}</span>
                   ) : (
-                    <span title={t("dashboard.legendTop8Chosen")}><Star size={11} className="inline mr-0.5" />{entry.has_top8 ? "✓" : "—"}</span>
+                    <span title={t("dashboard.legendTop8Chosen", { mark: entry.has_top8 ? "✓" : "✗" })}>
+                      <Star size={11} className="inline mr-0.5" />{entry.has_top8 ? "✓" : "✗"}
+                    </span>
                   )}
                   {entry.tournament_calculated && (
                     <span title={t("dashboard.legendTournament")}><Award size={11} className="inline mr-0.5" />{entry.tournament_points}</span>
@@ -154,7 +156,7 @@ export default function Dashboard() {
         {/* Legend */}
         <div className="mt-4 pt-4 border-t border-ucl-blue/30 flex items-center gap-4 flex-wrap text-xs text-ucl-silver/50 font-mono">
           <span><ListChecks size={11} className="inline mr-1" />{t("dashboard.legendPredictions")}</span>
-          <span><Star size={11} className="inline mr-1" />{anyTop8Calculated ? t("dashboard.legendTop8") : t("dashboard.legendTop8Chosen")}</span>
+          <span><Star size={11} className="inline mr-1" />{anyTop8Calculated ? t("dashboard.legendTop8") : t("dashboard.legendTop8Chosen", { mark: "✓ / ✗" })}</span>
           {anyTournamentCalculated && <span><Award size={11} className="inline mr-1" />{t("dashboard.legendTournament")}</span>}
         </div>
       </Card>
