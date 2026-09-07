@@ -231,6 +231,10 @@ async def _fetch_paced(fetch, keys: list) -> list:
     return results
 
 
+# Por debajo de esto una plantilla se considera corta (se avisa en el log).
+_SHORT_SQUAD = 18
+
+
 async def _do_sync_players():
     # Una petición /players/squads por equipo VIVO (con partidos pendientes),
     # espaciadas para respetar el límite por minuto del plan.
@@ -254,6 +258,10 @@ async def _do_sync_players():
             continue
         parsed.extend(rows)
         fetched[team_api_id] = {r["api_player_id"] for r in rows}
+        # Diagnóstico: la API entrega la plantilla tal cual; si viene corta, que
+        # quede en el log con el equipo (no es un fallo del sync).
+        if len(rows) < _SHORT_SQUAD:
+            logger.warning("Plantilla corta para el equipo %s: %d jugadores (la API no entrega más).", team_api_id, len(rows))
 
     async with AsyncSessionLocal() as db:
         count = await player_crud.upsert_many(db, parsed)
