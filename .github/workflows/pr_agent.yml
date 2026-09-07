@@ -1,10 +1,11 @@
 name: PR Agent
 
 # Revisión de código con IA usando PR-Agent (open-source, the-pr-agent/pr-agent)
-# con el free tier de Google Gemini. NO es de pago.
+# con Google Gemini. Con plan de pago (key de un proyecto con facturación) usa
+# gemini-2.5-pro; con una key del free tier cae solo a los modelos flash.
 #
-# Requisito único: añadir el secret GEMINI_API_KEY (key GRATIS en
-# https://aistudio.google.com/apikey). Si ese secret NO existe, el paso se OMITE
+# Requisito único: añadir el secret GEMINI_API_KEY (https://aistudio.google.com/apikey,
+# creada en el proyecto con facturación). Si ese secret NO existe, el paso se OMITE
 # (no falla el PR): el repo sigue funcionando siempre, sin coste ni bloqueos.
 on:
   pull_request:
@@ -41,16 +42,13 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GOOGLE_AI_STUDIO.GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          # Alias "-latest" del free tier de Gemini: apuntan siempre al flash vigente
-          # y están disponibles para keys nuevas. Los nombres fijos por versión se
-          # retiran para "nuevos usuarios" (404) o pierden free tier (429 "limit: 0"),
-          # p. ej. gemini-2.0-flash y gemini-2.5-flash. Ref:
-          # https://ai.google.dev/gemini-api/docs/models
-          config.model: "gemini/gemini-flash-latest"
-          # El primer respaldo es el MISMO flash: ante 503 "high demand" (transitorio)
-          # da una segunda tanda de reintentos antes de degradar a lite, que con diffs
-          # grandes responde "sin sugerencias" y enmascara el fallo del principal.
-          config.fallback_models: '["gemini/gemini-flash-latest", "gemini/gemini-flash-lite-latest"]'
+          # Plan de PAGO: gemini-2.5-pro como principal (mejor calidad de revisión y
+          # prioridad de capacidad frente al pool gratuito, que daba 503 "high demand").
+          # Respaldos: 2.5-flash y el alias flash-latest. Si la key fuese del free
+          # tier, pro responde 429 ("limit: 0") y PR-Agent pasa al respaldo: no rompe.
+          # Ref: https://ai.google.dev/gemini-api/docs/models
+          config.model: "gemini/gemini-2.5-pro"
+          config.fallback_models: '["gemini/gemini-2.5-flash", "gemini/gemini-flash-latest"]'
           # Límite de tokens para modelos que PR-Agent no tiene en su registro
           # MAX_TOKENS (el de respaldo): sin esto el fallback falla al no saber su tope.
           config.custom_model_max_tokens: "1048576"
