@@ -2,7 +2,7 @@ name: PR Agent
 
 # Revisión de código con IA usando PR-Agent (open-source, the-pr-agent/pr-agent)
 # con Google Gemini. Con plan de pago (key de un proyecto con facturación) usa
-# gemini-2.5-pro; con una key del free tier cae solo a los modelos flash.
+# gemini-3.1-pro-preview; con una key del free tier cae solo al flash-latest.
 #
 # Requisito único: añadir el secret GEMINI_API_KEY (https://aistudio.google.com/apikey,
 # creada en el proyecto con facturación). Si ese secret NO existe, el paso se OMITE
@@ -42,13 +42,15 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GOOGLE_AI_STUDIO.GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          # Plan de PAGO: gemini-2.5-pro como principal (mejor calidad de revisión y
-          # prioridad de capacidad frente al pool gratuito, que daba 503 "high demand").
-          # Respaldos: 2.5-flash y el alias flash-latest. Si la key fuese del free
-          # tier, pro responde 429 ("limit: 0") y PR-Agent pasa al respaldo: no rompe.
-          # Ref: https://ai.google.dev/gemini-api/docs/models
-          config.model: "gemini/gemini-2.5-pro"
-          config.fallback_models: '["gemini/gemini-2.5-flash", "gemini/gemini-flash-latest"]'
+          # Plan de PAGO: el modelo "pro" vigente que Google indica en su propio error al
+          # pedir gemini-2.5-pro ("no longer available to new users... use
+          # gemini-3.1-pro-preview"): los nombres 2.5 están retirados para keys nuevas.
+          # Mejor calidad de revisión y prioridad de capacidad frente al pool gratuito
+          # (503 "high demand"). Respaldo: el alias flash-latest. Si la key fuese del
+          # free tier, un modelo preview responde 429 ("limit: 0") y PR-Agent pasa al
+          # respaldo sin romper. Ref: https://ai.google.dev/gemini-api/docs/models
+          config.model: "gemini/gemini-3.1-pro-preview"
+          config.fallback_models: '["gemini/gemini-flash-latest"]'
           # Límite de tokens para modelos que PR-Agent no tiene en su registro
           # MAX_TOKENS (el de respaldo): sin esto el fallback falla al no saber su tope.
           config.custom_model_max_tokens: "1048576"
