@@ -1,14 +1,18 @@
 name: PR Agent
 
 # Revisión de código con IA usando PR-Agent (open-source, the-pr-agent/pr-agent)
-# con el free tier de Google Gemini. NO es de pago.
+# con Google Gemini. Con plan de pago (key de un proyecto con facturación) usa
+# gemini-3.1-pro-preview; con una key del free tier cae solo al flash-latest.
 #
-# Requisito único: añadir el secret GEMINI_API_KEY (key GRATIS en
-# https://aistudio.google.com/apikey). Si ese secret NO existe, el paso se OMITE
+# Requisito único: añadir el secret GEMINI_API_KEY (https://aistudio.google.com/apikey,
+# creada en el proyecto con facturación). Si ese secret NO existe, el paso se OMITE
 # (no falla el PR): el repo sigue funcionando siempre, sin coste ni bloqueos.
 on:
   pull_request:
-    types: [opened, reopened, ready_for_review]
+    # synchronize: también en cada push al PR. El flujo del repo abre el PR con el
+    # primer commit y lo hace crecer después; sin esto solo se revisaba el diff
+    # inicial (a veces mínimo) y el resto nunca pasaba por la revisión.
+    types: [opened, synchronize, reopened, ready_for_review]
   issue_comment:
     types: [created]
 
@@ -16,6 +20,12 @@ permissions:
   contents: write
   issues: write
   pull-requests: write
+
+# Un run por PR: si llegan varios pushes seguidos se cancela el anterior (los
+# comentarios de revisión/sugerencias son persistentes y se actualizan en sitio).
+concurrency:
+  group: pr-agent-${{ github.event.pull_request.number || github.event.issue.number }}
+  cancel-in-progress: true
 
 jobs:
   pr_agent:
@@ -32,13 +42,15 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GOOGLE_AI_STUDIO.GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          # Alias "-latest" del free tier de Gemini: apuntan siempre al flash vigente
-          # y están disponibles para keys nuevas. Los nombres fijos por versión se
-          # retiran para "nuevos usuarios" (404) o pierden free tier (429 "limit: 0"),
-          # p. ej. gemini-2.0-flash y gemini-2.5-flash. Ref:
-          # https://ai.google.dev/gemini-api/docs/models
-          config.model: "gemini/gemini-flash-latest"
-          config.fallback_models: '["gemini/gemini-flash-lite-latest"]'
+          # Plan de PAGO: el modelo "pro" vigente que Google indica en su propio error al
+          # pedir gemini-2.5-pro ("no longer available to new users... use
+          # gemini-3.1-pro-preview"): los nombres 2.5 están retirados para keys nuevas.
+          # Mejor calidad de revisión y prioridad de capacidad frente al pool gratuito
+          # (503 "high demand"). Respaldo: el alias flash-latest. Si la key fuese del
+          # free tier, un modelo preview responde 429 ("limit: 0") y PR-Agent pasa al
+          # respaldo sin romper. Ref: https://ai.google.dev/gemini-api/docs/models
+          config.model: "gemini/gemini-3.1-pro-preview"
+          config.fallback_models: '["gemini/gemini-flash-latest"]'
           # Límite de tokens para modelos que PR-Agent no tiene en su registro
           # MAX_TOKENS (el de respaldo): sin esto el fallback falla al no saber su tope.
           config.custom_model_max_tokens: "1048576"
@@ -48,7 +60,14 @@ jobs:
           github_action_config.auto_review: "true"
           github_action_config.auto_describe: "true"
           github_action_config.auto_improve: "true"
+          # Eventos del PR en los que corren las acciones automáticas. Por defecto el
+          # runner IGNORA `synchronize` ("Skipping action: synchronize") aunque el
+          # workflow lo dispare: hay que incluirlo aquí para revisar cada push.
+          github_action_config.pr_actions: '["opened", "reopened", "ready_for_review", "review_requested", "synchronize"]'
           # Sugerencias en UNA sola llamada: se omite la 2ª de auto-evaluación, que en
           # el free tier pega 503 transitorios y hacía fallar la publicación pese a
           # haberse generado. Así improve es tan fiable como review.
           pr_code_suggestions.self_reflect_on_suggestions: "false"
+          # Sin "análisis de ticket": toma cualquier "#N" del texto del PR (p. ej. una
+          # referencia a otro PR) como issue y publica un bloque de cumplimiento erróneo.
+          pr_reviewer.require_ticket_analysis_review: "false"

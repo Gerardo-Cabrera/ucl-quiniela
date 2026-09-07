@@ -2,7 +2,7 @@
   "common": {
     "loading": "Cargando...",
     "vs": "vs",
-    "pts": "pts",
+    "pts": "PTS",
     "dash": "—",
     "close": "Cerrar",
     "errorGeneric": "No se pudo completar la acción. Intenta de nuevo.",
@@ -81,9 +81,10 @@
     "shareAria": "Compartir la tabla general por WhatsApp",
     "shareTitle": "UCL Quiniela · Tabla General",
     "you": "(tú)",
-    "legendMatches": "Partidos",
-    "legendTop8": "Top 8",
-    "legendTournament": "Torneo",
+    "legendPredictions": "Pronósticos hechos",
+    "legendTop8Chosen": "Top 8 elegido ({{mark}})",
+    "legendTop8": "Pts Top 8",
+    "legendTournament": "Pts torneo",
     "viewPredictions": "Ver pronósticos",
     "emptyTitle": "Sin datos aún",
     "emptyDescription": "Los puntos aparecerán cuando haya partidos finalizados."

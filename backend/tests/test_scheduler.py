@@ -257,6 +257,33 @@ async def test_sync_players_prunes_departed_and_keeps_failed_teams(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_sync_players_resolves_player_listed_in_two_squads(monkeypatch):
+    """Tras un traspaso, la API lista al jugador en su club nuevo y aún en el viejo.
+    Se asigna al club de su último traspaso, no al último equipo procesado."""
+    monkeypatch.setattr(scheduler_module.settings, "API_REQUESTS_PER_MINUTE", 60_000)
+    await _add_match(1, 541, 529, status=MatchStatus.SCHEDULED)
+    doble = {"id": 99, "name": "Doble", "position": "Attacker"}
+
+    async def fake_fetch_squad(team_api_id: int) -> list[dict]:
+        team = {"id": team_api_id, "name": "Barcelona" if team_api_id == 529 else "Real Madrid"}
+        return [{"team": team, "players": [doble]}]
+
+    async def fake_current_team(player_id: int) -> int | None:
+        return 529 if player_id == 99 else None   # se fue al Barcelona (id mayor procesado... último)
+
+    monkeypatch.setattr(ucl_api, "fetch_squad", fake_fetch_squad)
+    monkeypatch.setattr(ucl_api, "fetch_current_team", fake_current_team)
+    # 529 se procesa ANTES que 541 (ids ascendentes): sin resolver, 541 ganaría.
+    await scheduler_module._do_sync_players()
+
+    async with TestSessionLocal() as session:
+        rows = (await session.execute(
+            select(Player.team_api_id).where(Player.api_player_id == 99)
+        )).all()
+    assert rows == [(529,)]
+
+
+@pytest.mark.asyncio
 async def test_fetch_paced_spaces_requests(monkeypatch):
     """Peticiones en secuencia con 60/API_REQUESTS_PER_MINUTE s entre ellas; un fallo
     individual no aborta el lote (se devuelve por posición)."""
