@@ -8,7 +8,10 @@ name: PR Agent
 # (no falla el PR): el repo sigue funcionando siempre, sin coste ni bloqueos.
 on:
   pull_request:
-    types: [opened, reopened, ready_for_review]
+    # synchronize: también en cada push al PR. El flujo del repo abre el PR con el
+    # primer commit y lo hace crecer después; sin esto solo se revisaba el diff
+    # inicial (a veces mínimo) y el resto nunca pasaba por la revisión.
+    types: [opened, synchronize, reopened, ready_for_review]
   issue_comment:
     types: [created]
 
@@ -16,6 +19,12 @@ permissions:
   contents: write
   issues: write
   pull-requests: write
+
+# Un run por PR: si llegan varios pushes seguidos se cancela el anterior (los
+# comentarios de revisión/sugerencias son persistentes y se actualizan en sitio).
+concurrency:
+  group: pr-agent-${{ github.event.pull_request.number || github.event.issue.number }}
+  cancel-in-progress: true
 
 jobs:
   pr_agent:
@@ -38,7 +47,10 @@ jobs:
           # p. ej. gemini-2.0-flash y gemini-2.5-flash. Ref:
           # https://ai.google.dev/gemini-api/docs/models
           config.model: "gemini/gemini-flash-latest"
-          config.fallback_models: '["gemini/gemini-flash-lite-latest"]'
+          # El primer respaldo es el MISMO flash: ante 503 "high demand" (transitorio)
+          # da una segunda tanda de reintentos antes de degradar a lite, que con diffs
+          # grandes responde "sin sugerencias" y enmascara el fallo del principal.
+          config.fallback_models: '["gemini/gemini-flash-latest", "gemini/gemini-flash-lite-latest"]'
           # Límite de tokens para modelos que PR-Agent no tiene en su registro
           # MAX_TOKENS (el de respaldo): sin esto el fallback falla al no saber su tope.
           config.custom_model_max_tokens: "1048576"
@@ -52,3 +64,6 @@ jobs:
           # el free tier pega 503 transitorios y hacía fallar la publicación pese a
           # haberse generado. Así improve es tan fiable como review.
           pr_code_suggestions.self_reflect_on_suggestions: "false"
+          # Sin "análisis de ticket": toma cualquier "#N" del texto del PR (p. ej. una
+          # referencia a otro PR) como issue y publica un bloque de cumplimiento erróneo.
+          pr_reviewer.require_ticket_analysis_review: "false"
