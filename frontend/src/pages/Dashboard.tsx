@@ -116,9 +116,11 @@ export default function Dashboard() {
                   {i < 3 ? ["🥇","🥈","🥉"][i] : entry.rank}
                 </span>
 
-                {/* Team name */}
+                {/* Nombre + desglose: en móvil el desglose va debajo del nombre; en
+                    pantallas anchas, en línea. Un solo elemento (sin duplicar). */}
+                <div className="flex-1 min-w-0 flex flex-col gap-0.5 sm:flex-row sm:items-center sm:gap-4">
                 <span className={clsx(
-                  "flex-1 text-sm font-medium truncate",
+                  "sm:flex-1 text-sm font-medium truncate",
                   isMe ? "text-ucl-gold" : "text-ucl-white"
                 )}>
                   {entry.team_name}
@@ -126,7 +128,7 @@ export default function Dashboard() {
                 </span>
 
                 {/* Points breakdown */}
-                <div className="hidden sm:flex items-center gap-3 text-xs text-ucl-silver/60 font-mono">
+                <div className="flex items-center gap-3 text-xs text-ucl-silver/60 font-mono shrink-0">
                   <span title={t("dashboard.legendPredictions")}><ListChecks size={11} className="inline mr-0.5" />{entry.predictions_count}</span>
                   {entry.top8_calculated ? (
                     <span title={t("dashboard.legendTop8")}><Star size={11} className="inline mr-0.5" />{entry.top8_points}</span>
@@ -138,6 +140,7 @@ export default function Dashboard() {
                   {entry.tournament_calculated && (
                     <span title={t("dashboard.legendTournament")}><Award size={11} className="inline mr-0.5" />{entry.tournament_points}</span>
                   )}
+                </div>
                 </div>
 
                 {/* Total */}
