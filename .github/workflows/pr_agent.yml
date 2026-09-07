@@ -60,6 +60,10 @@ jobs:
           github_action_config.auto_review: "true"
           github_action_config.auto_describe: "true"
           github_action_config.auto_improve: "true"
+          # Eventos del PR en los que corren las acciones automáticas. Por defecto el
+          # runner IGNORA `synchronize` ("Skipping action: synchronize") aunque el
+          # workflow lo dispare: hay que incluirlo aquí para revisar cada push.
+          github_action_config.pr_actions: '["opened", "reopened", "ready_for_review", "review_requested", "synchronize"]'
           # Sugerencias en UNA sola llamada: se omite la 2ª de auto-evaluación, que en
           # el free tier pega 503 transitorios y hacía fallar la publicación pese a
           # haberse generado. Así improve es tan fiable como review.
