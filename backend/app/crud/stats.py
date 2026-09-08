@@ -37,7 +37,7 @@ class StatsCRUD:
                 Prediction.first_goal_player_id,
             )
             .select_from(Prediction).join(Match).join(User)
-            .where(Prediction.is_calculated.is_(True))
+            .where(Prediction.is_calculated.is_(True), User.is_active.is_(True))
         )).all()
 
         by_id = {m.id: m for m in matches}

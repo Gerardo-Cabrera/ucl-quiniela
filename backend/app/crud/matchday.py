@@ -20,7 +20,7 @@ class MatchdayCRUD:
         result = await db.execute(
             select(User.id, User.team_name, Match.match_date, Prediction.points_earned)
             .select_from(Prediction).join(Match).join(User)
-            .where(Prediction.is_calculated.is_(True))
+            .where(Prediction.is_calculated.is_(True), User.is_active.is_(True))
         )
 
         # día -> user_id -> [team_name, puntos acumulados ese día]
