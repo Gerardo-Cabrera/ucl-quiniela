@@ -67,6 +67,8 @@ class LeaderboardCRUD:
             .outerjoin(match_pts_q, User.id == match_pts_q.c.user_id)
             .outerjoin(top8_pts_q, User.id == top8_pts_q.c.user_id)
             .outerjoin(tournament_pts_q, User.id == tournament_pts_q.c.user_id)
+            # Solo cuentas activas: una desactivada (is_active=False) no aparece en la tabla.
+            .where(User.is_active.is_(True))
             .order_by(
                 total_expr.desc(),
                 # Desempate determinista: mismo orden en cada request.

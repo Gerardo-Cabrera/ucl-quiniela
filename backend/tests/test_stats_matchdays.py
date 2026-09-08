@@ -12,6 +12,7 @@ from httpx import AsyncClient
 from app.models.match import Match, MatchPhase, MatchStatus
 from app.models.prediction import Prediction
 from app.models.user import User
+from sqlalchemy import select
 from tests.conftest import TestSessionLocal
 
 
@@ -112,6 +113,25 @@ async def test_matchdays_mvp(auth_client: AsyncClient):
     assert [e["team_name"] for e in day["entries"]] == ["Jax FC", "Megalink FC"]
 
     assert data["mvp_ranking"] == [{"team_name": "Jax FC", "count": 1}]
+
+
+@pytest.mark.asyncio
+async def test_inactive_user_hidden_from_stats_and_matchdays(auth_client: AsyncClient):
+    """Una cuenta desactivada (is_active=False) desaparece de Jornada/MVPs y de
+    Aciertos aunque tenga pronósticos puntuados (sus datos se conservan)."""
+    await _seed_scored_match()
+    async with TestSessionLocal() as session:
+        rival = (await session.execute(
+            select(User).where(User.team_name == "Megalink FC")
+        )).scalar_one()
+        rival.is_active = False
+        await session.commit()
+
+    day = (await auth_client.get("/api/matchdays/")).json()["days"][0]
+    assert [e["team_name"] for e in day["entries"]] == ["Jax FC"]
+
+    stats = (await auth_client.get("/api/stats/")).json()
+    assert all(r["team_name"] == "Jax FC" for r in stats["first_goal_ranking"] + stats["exact_ranking"])
 
 
 @pytest.mark.asyncio

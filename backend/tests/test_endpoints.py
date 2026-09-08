@@ -417,6 +417,25 @@ async def test_leaderboard_ties_share_rank(auth_client: AsyncClient):
 
 
 @pytest.mark.asyncio
+async def test_leaderboard_hides_inactive_users(auth_client: AsyncClient):
+    """Una cuenta desactivada (is_active=False) no aparece en la Tabla General."""
+    from app.models.user import User
+
+    resp = await auth_client.post("/api/auth/register", json={
+        "team_name": "Baja FC", "email": "baja@test.com", "password": "pass1234",
+    })
+    assert resp.status_code == 201
+    async with TestSessionLocal() as session:
+        user = await session.get(User, resp.json()["id"])
+        user.is_active = False
+        await session.commit()
+
+    names = [e["team_name"] for e in (await auth_client.get("/api/leaderboard/")).json()]
+    assert "Jax FC" in names
+    assert "Baja FC" not in names
+
+
+@pytest.mark.asyncio
 async def test_top8_empty(auth_client: AsyncClient):
     resp = await auth_client.get("/api/top8/me")
     assert resp.status_code == 200
