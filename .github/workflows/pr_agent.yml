@@ -21,10 +21,12 @@ permissions:
   issues: write
   pull-requests: write
 
-# Un run por PR: si llegan varios pushes seguidos se cancela el anterior (los
-# comentarios de revisión/sugerencias son persistentes y se actualizan en sitio).
+# Un run por PR y por tipo de evento: si llegan varios pushes seguidos se cancela el
+# anterior (los comentarios son persistentes y se actualizan en sitio). El tipo de
+# evento forma parte del grupo a propósito: un `issue_comment` (p. ej. el que un bot
+# publica segundos después de abrir el PR) NO debe cancelar la revisión del push.
 concurrency:
-  group: pr-agent-${{ github.event.pull_request.number || github.event.issue.number }}
+  group: pr-agent-${{ github.event_name }}-${{ github.event.pull_request.number || github.event.issue.number }}
   cancel-in-progress: true
 
 jobs:
