@@ -17,6 +17,7 @@ async def get_matchdays_summary(
     db: AsyncSession = Depends(get_db),
     _: User = Depends(get_current_user),
 ):
-    """Resumen por jornada (día): puntos de cada participante y el MVP del día, más
-    el ranking de MVPs (veces como MVP). Alimenta las vistas Jornada y MVPs."""
+    """Resumen por día y por jornada completa (ronda): puntos de cada participante,
+    MVP de cada grupo y si el grupo ya terminó (`complete`, habilita compartirlo),
+    más el ranking de MVPs del día. Alimenta las vistas Jornada y MVPs."""
     return await matchday_crud.get_summary(db, _TOURNAMENT_TZ)

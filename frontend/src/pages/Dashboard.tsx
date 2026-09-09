@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { Trophy, Star, Award, ListChecks, Share2 } from "lucide-react";
+import { Trophy, Star, Award, ListChecks } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useLeaderboard } from "@/hooks";
 import { Card, Spinner, EmptyState } from "@/components/ui";
 import { UserPredictionsModal } from "@/components/UserPredictionsModal";
+import { ShareButton } from "@/components/ShareButton";
 import { useAuthStore } from "@/store/authStore";
 import { clsx } from "clsx";
 
@@ -38,16 +39,11 @@ export default function Dashboard() {
   const anyTop8Calculated = leaderboard.some((e) => e.top8_calculated);
   const anyTournamentCalculated = leaderboard.some((e) => e.tournament_calculated);
 
-  // Comparte la tabla como texto: WhatsApp (u otra app) se abre con el mensaje
-  // pre-cargado y el usuario elige el grupo. Reutiliza los datos ya mostrados.
-  // Sin emojis (astral/4 bytes): WhatsApp los corrompe en el texto de wa.me.
-  const shareWhatsApp = () => {
-    const rows = leaderboard.map(
-      (e) => `${e.rank}. ${e.team_name} — ${e.total_points} ${t("common.pts")}`,
-    );
-    const text = `${t("dashboard.shareTitle")}\n\n${rows.join("\n")}`;
-    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank", "noopener,noreferrer");
-  };
+  // La tabla como texto para compartir (reutiliza los datos ya mostrados).
+  const shareText = [
+    t("dashboard.shareTitle"), "",
+    ...leaderboard.map((e) => `${e.rank}. ${e.team_name} — ${e.total_points} ${t("common.pts")}`),
+  ].join("\n");
 
   return (
     <div className="space-y-6 animate-in">
@@ -84,13 +80,7 @@ export default function Dashboard() {
             <Trophy size={18} className="text-ucl-gold" />
             <h2 className="font-display text-2xl">{t("dashboard.classification")}</h2>
           </div>
-          <button
-            onClick={shareWhatsApp}
-            aria-label={t("dashboard.shareAria")}
-            className="flex items-center gap-1.5 text-xs font-medium text-ucl-silver hover:text-ucl-gold border border-ucl-blue/50 hover:border-ucl-gold/50 rounded-lg px-3 py-1.5 transition-colors shrink-0"
-          >
-            <Share2 size={14} /> {t("dashboard.share")}
-          </button>
+          <ShareButton text={shareText} ariaLabel={t("dashboard.shareAria")} />
         </div>
 
         <div className="space-y-2">

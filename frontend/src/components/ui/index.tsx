@@ -138,6 +138,38 @@ export function RankingCard({ title, icon, rows, valueSuffix = "", emptyText }: 
   );
 }
 
+// ── PILLS ─────────────────────────────────────────────────────────────────────
+
+/** Fila de píldoras excluyentes (filtros de Partidos, vista de Jornada). `tone`:
+ *  dorada para la selección principal, azul para la secundaria. */
+export function Pills<T extends string>({ options, value, onChange, tone = "gold" }: {
+  options: { value: T; label: string }[];
+  value: T;
+  onChange: (value: T) => void;
+  tone?: "gold" | "blue";
+}) {
+  return (
+    <div className="flex gap-2 flex-wrap">
+      {options.map((o) => (
+        <button
+          key={o.value}
+          onClick={() => onChange(o.value)}
+          className={clsx(
+            "px-3 py-1.5 rounded-full text-xs font-mono transition-all duration-150",
+            o.value === value
+              ? tone === "gold" ? "bg-ucl-gold text-ucl-navy font-bold" : "bg-ucl-blue text-ucl-white font-bold"
+              : tone === "gold"
+                ? "border border-ucl-blue/50 text-ucl-silver hover:border-ucl-gold hover:text-ucl-gold"
+                : "border border-ucl-blue/50 text-ucl-silver hover:border-ucl-silver",
+          )}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 // ── STATUS DOT ────────────────────────────────────────────────────────────────
 
 export function StatusDot({ status }: { status: MatchStatus }) {

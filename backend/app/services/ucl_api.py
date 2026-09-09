@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, timezone
 from app.config import settings
 from app.models.match import MatchPhase, MatchStatus
 import logging
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +46,15 @@ ROUND_MAP = {
     "Semi-finals":              MatchPhase.SEMI_FINALS,
     "Final":                    MatchPhase.FINAL,
 }
+
+
+_LEAGUE_ROUND = re.compile(r"League Stage - (\d+)$")
+
+
+def _round_number(raw_round: str) -> int | None:
+    """Jornada de la fase de liga ('League Stage - N'); None en eliminatorias."""
+    m = _LEAGUE_ROUND.search(raw_round)
+    return int(m.group(1)) if m else None
 
 
 def _resolve_phase(raw_round: str) -> MatchPhase | None:
@@ -249,7 +259,8 @@ def parse_fixture(fixture_data: dict) -> dict | None:
     # Tanda de penales (solo en eliminatorias empatadas): None fuera de ese caso.
     penalty = (fixture_data.get("score") or {}).get("penalty") or {}
 
-    phase = _resolve_phase(league.get("round", "League Stage"))
+    raw_round = league.get("round", "League Stage")
+    phase = _resolve_phase(raw_round)
     if phase is None:
         return None  # fase previa: fuera del alcance de la quiniela
     raw_status = f["status"]["short"]
@@ -281,6 +292,7 @@ def parse_fixture(fixture_data: dict) -> dict | None:
         "penalty_away":     penalty.get("away"),
         "elapsed":          f["status"].get("elapsed"),
         "elapsed_extra":    f["status"].get("extra"),   # descuento en curso ("90+3")
+        "round_number":     _round_number(raw_round),
         "phase":            phase,
         "status":           status,
         "match_date":       match_date,
