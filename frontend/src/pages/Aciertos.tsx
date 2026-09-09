@@ -19,14 +19,18 @@ function HitList({ title, rows }: { title: string; rows: HitRow[] }) {
   return (
     <Card>
       <h2 className="font-display text-xl mb-4">{title}</h2>
+      {/* Los acertantes nunca se recortan: en móvil van en su propia línea bajo el
+          partido; en pantallas anchas comparten fila y saltan de línea si hace falta. */}
       <div className="space-y-2">
         {rows.map((r) => (
-          <div key={r.match_id} className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-ucl-blue/20 text-sm">
-            <span className="flex-1 text-ucl-white truncate">
+          <div key={r.match_id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 rounded-lg hover:bg-ucl-blue/20 text-sm">
+            <span className="flex-1 min-w-0 text-ucl-white truncate">
               {r.home_team} <span className="text-ucl-silver/40">{t("common.vs")}</span> {r.away_team}
             </span>
             <span className="text-ucl-gold font-medium font-mono shrink-0">{r.value}</span>
-            <span className="text-xs text-ucl-silver/60 truncate max-w-[40%] text-right">{r.hitters.join(", ")}</span>
+            <span className="w-full sm:w-auto sm:flex-1 sm:basis-0 text-xs text-ucl-silver/60 sm:text-right break-words">
+              {r.hitters.join(", ")}
+            </span>
           </div>
         ))}
       </div>

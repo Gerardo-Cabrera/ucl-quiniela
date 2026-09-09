@@ -15,7 +15,7 @@ from app.models.match import Match, MatchPhase, MatchStatus
 from app.models.prediction import Prediction
 from app.services import ucl_api
 from app.services.scoring import calculate_match_points
-from app.crud import player_crud, team_crud, top8_crud, app_state_crud
+from app.crud import player_crud, team_crud, top8_crud
 from app.crud._upsert import upsert_by_key
 from app.config import settings
 import logging
@@ -152,8 +152,6 @@ async def sync_fixtures():
         if newly_finished:
             logger.info("Partido(s) recién finalizado(s): puntuando tras el pitazo final.")
             await _retry(_do_calculate_points, "calculate_pending_points")
-            # Los rankings de goleadores/asistidores cambian con cada partido terminado.
-            await _retry(_do_sync_tournament_stats, "sync_tournament_stats")
 
 
 async def sync_ucl_fixtures():
@@ -322,11 +320,15 @@ async def sync_players():
 
 
 async def _do_sync_first_goals():
+    """Para cada partido finalizado con goles cuyos eventos aún no se procesaron,
+    los consulta UNA vez: guarda los goles (goleador + asistente; base de los
+    rankings de goleadores/asistidores) y resuelve el primer gol si no lo está.
+    También rellena los goles de partidos ya resueltos antes de guardarse."""
     async with AsyncSessionLocal() as db:
         result = await db.execute(
             select(Match).where(
                 Match.status == MatchStatus.FINISHED,
-                Match.first_goal_team.is_(None),
+                or_(Match.first_goal_team.is_(None), Match.goal_events.is_(None)),
                 Match.home_score.is_not(None),
                 Match.away_score.is_not(None),
                 # Partidos 0-0 no tienen primer gol: no consultar eventos.
@@ -353,6 +355,9 @@ async def _do_sync_first_goals():
                     match.api_fixture_id, events,
                 )
                 continue
+            match.goal_events = ucl_api.parse_goal_events(events)
+            if match.first_goal_team is not None:
+                continue   # ya resuelto: solo faltaban los goles guardados (relleno)
             scorer = ucl_api.get_first_goal_scorer(events)
             if scorer is None:
                 continue
@@ -372,11 +377,12 @@ async def _do_sync_first_goals():
             )
 
         await db.commit()
-        logger.info("Updated first goals for %d matches.", updated)
+        logger.info("Eventos procesados de %d partidos; primer gol resuelto en %d.", len(matches), updated)
 
 
 async def sync_first_goals():
-    """Para partidos finalizados sin primer gol, consulta eventos. Se ejecuta cada hora."""
+    """Eventos de partidos finalizados con goles pendientes (primer gol o goles
+    guardados). Cada hora y tras cada sync de fixtures."""
     logger.info("Starting first goals sync...")
     await _retry(_do_sync_first_goals, "sync_first_goals")
 
@@ -426,36 +432,6 @@ async def _do_calculate_points():
 
         await db.commit()
         logger.info("Calculated points for %d predictions.", len(predictions))
-
-
-# Filas por ranking que se guardan y muestran (la API devuelve hasta 20).
-_LEADERS_COUNT = 10
-
-
-async def _do_sync_tournament_stats():
-    """Rankings de goleadores y asistidores de la temporada (vista Torneo): dos
-    peticiones (`/players/topscorers` y `/players/topassists`). Se omite mientras no
-    haya partidos finalizados (pretemporada: no hay datos y no se gasta cuota)."""
-    async with AsyncSessionLocal() as db:
-        any_finished = (await db.execute(
-            select(Match.id).where(Match.status == MatchStatus.FINISHED).limit(1)
-        )).first() is not None
-    if not any_finished:
-        logger.info("Sync de estadísticas omitido: aún no hay partidos finalizados.")
-        return
-    scorers = [ucl_api.parse_top_player(p) for p in await ucl_api.fetch_top_players("topscorers")]
-    assists = [ucl_api.parse_top_player(p) for p in await ucl_api.fetch_top_players("topassists")]
-    async with AsyncSessionLocal() as db:
-        await app_state_crud.set_tournament_stats(db, scorers[:_LEADERS_COUNT], assists[:_LEADERS_COUNT])
-        await db.commit()
-    logger.info("Synced tournament stats: %d goleadores, %d asistidores.", len(scorers), len(assists))
-
-
-async def sync_tournament_stats():
-    """Goleadores y asistidores de la temporada. Cada SYNC_STATS_HOURS (y al arrancar);
-    además se refresca al terminar cada partido (ver sync_fixtures)."""
-    logger.info("Starting tournament stats sync...")
-    await _retry(_do_sync_tournament_stats, "sync_tournament_stats")
 
 
 async def _do_calculate_top8():
@@ -524,10 +500,8 @@ def start_scheduler():
     scheduler.add_job(calculate_pending_points, IntervalTrigger(minutes=settings.CALC_POINTS_MINUTES),   id="calc_points",     replace_existing=True, next_run_time=now + timedelta(seconds=60))
     # Plantillas: tras los fixtures (necesita los ids de equipo), refresco diario.
     scheduler.add_job(sync_players,             IntervalTrigger(hours=settings.SYNC_SQUADS_HOURS),       id="sync_players",    replace_existing=True, next_run_time=now + timedelta(seconds=90))
-    # Goleadores/asistidores (vista Torneo): al arrancar y refresco diario (y al terminar partidos).
-    scheduler.add_job(sync_tournament_stats,    IntervalTrigger(hours=settings.SYNC_STATS_HOURS),        id="sync_stats",      replace_existing=True, next_run_time=now + timedelta(seconds=120))
     scheduler.start()
-    logger.info("Scheduler started with 6 jobs.")
+    logger.info("Scheduler started with 5 jobs.")
 
 
 def stop_scheduler():

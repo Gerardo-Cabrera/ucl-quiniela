@@ -754,10 +754,26 @@ async def test_tournament_players_list(auth_client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_tournament_stats_empty_until_synced(auth_client: AsyncClient):
-    resp = await auth_client.get("/api/tournament/stats")
-    assert resp.status_code == 200
-    assert resp.json() == {"top_scorers": [], "top_assists": []}
+async def test_tournament_stats_from_goal_events(auth_client: AsyncClient):
+    """Goleadores/asistidores se agregan de los goles guardados por partido
+    FINALIZADO (fase de liga en adelante); vacíos si aún no hay goles."""
+    assert (await auth_client.get("/api/tournament/stats")).json() == {"top_scorers": [], "top_assists": []}
+
+    def goal(pid, name, aid, aname):
+        return {"player_id": pid, "player": name, "assist_id": aid, "assist": aname, "team": "Real Madrid"}
+
+    past = datetime.now(timezone.utc) - timedelta(days=1)
+    await _create_match(api_fixture_id=3001, status=MatchStatus.FINISHED, home_score=2, away_score=0, match_date=past,
+                        goal_events=[goal(10, "Vinicius Jr", 11, "Bellingham"), goal(10, "Vinicius Jr", None, None)])
+    await _create_match(api_fixture_id=3002, status=MatchStatus.FINISHED, home_score=1, away_score=0, match_date=past,
+                        goal_events=[goal(11, "Bellingham", 10, "Vinicius Jr")])
+    # Un partido no finalizado no cuenta aunque tenga goles guardados.
+    await _create_match(api_fixture_id=3003, goal_events=[goal(21, "Lamine Yamal", None, None)])
+
+    data = (await auth_client.get("/api/tournament/stats")).json()
+    assert [(r["name"], r["goals"], r["assists"]) for r in data["top_scorers"]] == [("Vinicius Jr", 2, 1), ("Bellingham", 1, 1)]
+    assert [(r["name"], r["assists"]) for r in data["top_assists"]] == [("Bellingham", 1), ("Vinicius Jr", 1)]
+    assert "photo" in data["top_scorers"][0]
 
 
 @pytest.mark.asyncio

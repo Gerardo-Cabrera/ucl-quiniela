@@ -1,4 +1,4 @@
-from sqlalchemy import String, Integer, DateTime, Enum as SAEnum
+from sqlalchemy import String, Integer, DateTime, JSON, Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 from datetime import datetime
@@ -50,6 +50,10 @@ class Match(Base):
     first_goal_team: Mapped[str | None] = mapped_column(String(100), nullable=True)
     first_goal_player_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     first_goal_player: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    # Goles del partido (goleador + asistente; sin goles en propia ni penaltis fallados),
+    # guardados al consultar los eventos para el primer gol. Base de los rankings de
+    # goleadores/asistidores de la quiniela (fase de liga en adelante) sin cuota extra.
+    goal_events: Mapped[list[dict] | None] = mapped_column(JSON, nullable=True)
 
     phase: Mapped[MatchPhase] = mapped_column(SAEnum(MatchPhase), default=MatchPhase.LEAGUE)
     status: Mapped[MatchStatus] = mapped_column(SAEnum(MatchStatus), default=MatchStatus.SCHEDULED)

@@ -434,57 +434,6 @@ async def test_sync_players_single_flight(monkeypatch):
     assert not scheduler_module.players_sync_in_progress()
 
 
-# ── ESTADÍSTICAS DEL TORNEO (goleadores / asistidores) ───────────────────────
-
-
-def _api_top_player(pid: int, name: str, team: str, goals: int, assists: int) -> dict:
-    """Entrada cruda de /players/topscorers|topassists (forma de API-Football)."""
-    return {"player": {"id": pid, "name": name, "photo": f"https://img/{pid}.png"},
-            "statistics": [{"team": {"name": team}, "games": {"appearences": 8},
-                            "goals": {"total": goals, "assists": assists}}]}
-
-
-@pytest.mark.asyncio
-async def test_sync_tournament_stats_skips_without_finished_matches(monkeypatch):
-    """Pretemporada (sin partidos finalizados): no consulta la API."""
-    calls: list[str] = []
-
-    async def fake(kind: str) -> list[dict]:
-        calls.append(kind)
-        return []
-
-    monkeypatch.setattr(ucl_api, "fetch_top_players", fake)
-    await _add_match(1, 541, 529, status=MatchStatus.SCHEDULED)
-    await scheduler_module._do_sync_tournament_stats()
-    assert calls == []
-
-
-@pytest.mark.asyncio
-async def test_sync_tournament_stats_stores_top_players(monkeypatch):
-    """Con partidos finalizados trae ambos rankings, los parsea (jugador, equipo,
-    goles, asistencias, partidos) y guarda hasta 10 de cada uno."""
-    await _add_match(1, 541, 529, status=MatchStatus.FINISHED)
-
-    async def fake(kind: str) -> list[dict]:
-        if kind == "topscorers":
-            return [_api_top_player(i, f"Goleador {i}", "Real Madrid", 12 - i, 1) for i in range(1, 13)]
-        return [_api_top_player(20, "Asistidor", "Barcelona", 2, 6)]
-
-    monkeypatch.setattr(ucl_api, "fetch_top_players", fake)
-    await scheduler_module._do_sync_tournament_stats()
-
-    async with TestSessionLocal() as session:
-        stats = await app_state_crud.get_tournament_stats(session)
-    assert len(stats["top_scorers"]) == 10   # recorta a 10
-    assert stats["top_scorers"][0] == {
-        "player_id": 1, "name": "Goleador 1", "photo": "https://img/1.png",
-        "team": "Real Madrid", "goals": 11, "assists": 1, "matches": 8,
-    }
-    assert stats["top_assists"] == [{
-        "player_id": 20, "name": "Asistidor", "photo": "https://img/20.png",
-        "team": "Barcelona", "goals": 2, "assists": 6, "matches": 8,
-    }]
-
 
 # ── ERRORES DE API-FOOTBALL (HTTP 200 con `errors`) ──────────────────────────
 
@@ -515,27 +464,58 @@ async def test_retry_retries_api_errors(monkeypatch):
     assert len(attempts) == 2
 
 
+# ── GOLES POR PARTIDO (base de goleadores / asistidores) ─────────────────────
+
+
 @pytest.mark.asyncio
-async def test_sync_tournament_stats_keeps_previous_on_api_error(monkeypatch):
-    """Un error de la API en cualquiera de los dos rankings NO borra el guardado: el
-    fetch lanza, el job aborta antes de persistir y _retry reintenta más tarde."""
-    await _add_match(1, 541, 529, status=MatchStatus.FINISHED)
+async def test_sync_first_goals_stores_goal_events(monkeypatch):
+    """Los eventos se consultan UNA vez por partido con goles: se guardan los goles
+    (goleador + asistente, sin goles en propia ni penaltis fallados) además de
+    resolver el primer gol."""
+    pred_id = await _seed(first_goal_resolved=False)
+
+    async def fake_fetch_events(fixture_id: int) -> list[dict]:
+        return [
+            {"time": {"elapsed": 70, "extra": None}, "type": "Goal", "detail": "Own Goal",
+             "team": {"name": "Real Madrid"}, "player": {"id": 20, "name": "Lewandowski"}, "assist": {"id": None, "name": None}},
+            {"time": {"elapsed": 23, "extra": None}, "type": "Goal", "detail": "Normal Goal",
+             "team": {"name": "Real Madrid"}, "player": {"id": 10, "name": "Vinicius Jr"}, "assist": {"id": 11, "name": "Bellingham"}},
+            {"time": {"elapsed": 88, "extra": None}, "type": "Goal", "detail": "Missed Penalty",
+             "team": {"name": "Barcelona"}, "player": {"id": 21, "name": "Lamine Yamal"}, "assist": {"id": None, "name": None}},
+        ]
+
+    monkeypatch.setattr(ucl_api, "fetch_fixture_events", fake_fetch_events)
+    await scheduler_module._do_sync_first_goals()
+
+    pred = await _get_prediction(pred_id)
     async with TestSessionLocal() as session:
-        await app_state_crud.set_tournament_stats(session, [{"name": "previo"}], [{"name": "previo"}])
+        match = await session.get(Match, pred.match_id)
+    assert match.first_goal_player_id == 10
+    assert match.goal_events == [{
+        "player_id": 10, "player": "Vinicius Jr", "assist_id": 11, "assist": "Bellingham", "team": "Real Madrid",
+    }]
+
+
+@pytest.mark.asyncio
+async def test_sync_first_goals_backfills_goal_events_without_reset(monkeypatch):
+    """Partido con primer gol ya resuelto pero sin goles guardados (anterior a esta
+    versión): se rellenan los goles y NO se resetea la puntuación."""
+    pred_id = await _seed(first_goal_resolved=True)
+    async with TestSessionLocal() as session:
+        pred = await session.get(Prediction, pred_id)
+        pred.is_calculated = True
+        pred.points_earned = 11
         await session.commit()
 
-    async def fake(kind: str) -> list[dict]:
-        if kind == "topassists":   # HTTP 200 con errors → lanza
-            return ucl_api._extract_response(
-                {"errors": {"requests": "You have reached the request limit"}, "response": []},
-                "players/topassists",
-            )
-        return [_api_top_player(1, "Goleador", "Real Madrid", 5, 1)]
+    async def fake_fetch_events(fixture_id: int) -> list[dict]:
+        return [{"time": {"elapsed": 23, "extra": None}, "type": "Goal", "detail": "Normal Goal",
+                 "team": {"name": "Real Madrid"}, "player": {"id": 10, "name": "Vinicius Jr"}}]
 
-    monkeypatch.setattr(ucl_api, "fetch_top_players", fake)
-    with pytest.raises(ucl_api.ApiFootballError):
-        await scheduler_module._do_sync_tournament_stats()
+    monkeypatch.setattr(ucl_api, "fetch_fixture_events", fake_fetch_events)
+    await scheduler_module._do_sync_first_goals()
 
+    pred = await _get_prediction(pred_id)
+    assert pred.is_calculated is True and pred.points_earned == 11
     async with TestSessionLocal() as session:
-        stats = await app_state_crud.get_tournament_stats(session)
-    assert stats == {"top_scorers": [{"name": "previo"}], "top_assists": [{"name": "previo"}]}
+        match = await session.get(Match, pred.match_id)
+    assert match.goal_events and match.goal_events[0]["player_id"] == 10

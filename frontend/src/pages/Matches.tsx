@@ -57,14 +57,19 @@ function AdminPredictionToggle() {
 
 export default function MatchesPage() {
   const { t } = useTranslation();
-  const [phase, setPhase]   = useState<MatchPhase | "all">("all");
-  const [status, setStatus] = useState<MatchStatus | "all">("scheduled");
+  const [phase, setPhase] = useState<MatchPhase | "all">("all");
+  // null = automático: "En Vivo" mientras haya partidos en juego; si no, "Próximos".
+  // Al elegir un filtro a mano, se respeta.
+  const [statusChoice, setStatusChoice] = useState<MatchStatus | "all" | null>(null);
   const [selected, setSelected] = useState<Match | null>(null);
 
-  const { data: matches, isLoading } = useMatches({
-    phase:  phase  !== "all" ? phase  : undefined,
-    status: status !== "all" ? status : undefined,
-  });
+  // Una sola consulta (compartida con otras vistas); el filtrado es en cliente.
+  const { data: allMatches, isLoading } = useMatches();
+  const hasLive = allMatches?.some((m) => m.status === "live") ?? false;
+  const status = statusChoice ?? (hasLive ? "live" : "scheduled");
+  const matches = allMatches?.filter(
+    (m) => (phase === "all" || m.phase === phase) && (status === "all" || m.status === status),
+  );
 
   const { data: predictions } = useMyPredictions();
 
@@ -103,7 +108,7 @@ export default function MatchesPage() {
           {STATUSES.map((value) => (
             <button
               key={value}
-              onClick={() => setStatus(value)}
+              onClick={() => setStatusChoice(value)}
               className={clsx(
                 "px-3 py-1.5 rounded-full text-xs font-mono transition-all duration-150",
                 status === value

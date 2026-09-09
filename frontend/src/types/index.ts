@@ -93,7 +93,6 @@ export interface TopPlayer {
   team: string | null;
   goals: number;
   assists: number;
-  matches: number;
 }
 
 export interface TournamentStats {

@@ -1,6 +1,8 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.models.tournament_prediction import TournamentPrediction
+from app.models.match import Match, MatchStatus
+from app.models.player import Player
 from app.config import settings
 
 
@@ -45,6 +47,43 @@ class TournamentCRUD:
             r.is_calculated = True
         await db.flush()
         return {"users_affected": len(rows)}
+
+    async def get_leaders(self, db: AsyncSession, limit: int = 10) -> dict[str, list[dict]]:
+        """Goleadores y asistidores de la quiniela (fase de liga en adelante), agregados
+        de los goles guardados por partido finalizado (`Match.goal_events`). Sin cuota
+        de API (los eventos ya se descargan para el primer gol) y sin almacenar
+        rankings. Empates: por nombre."""
+        rows = (await db.execute(
+            select(Match.goal_events).where(
+                Match.status == MatchStatus.FINISHED, Match.goal_events.is_not(None)
+            )
+        )).scalars().all()
+        players: dict[int, dict] = {}
+
+        def bump(pid: int | None, name: str | None, team: str | None, key: str) -> None:
+            if pid is None:
+                return
+            row = players.setdefault(pid, {"player_id": pid, "name": name, "team": team, "goals": 0, "assists": 0})
+            row[key] += 1
+
+        for goals in rows:
+            for g in goals:
+                bump(g.get("player_id"), g.get("player"), g.get("team"), "goals")
+                bump(g.get("assist_id"), g.get("assist"), g.get("team"), "assists")
+
+        photos: dict[int, str | None] = {}
+        if players:
+            photos = dict((await db.execute(
+                select(Player.api_player_id, Player.photo).where(Player.api_player_id.in_(list(players)))
+            )).all())
+        for row in players.values():
+            row["photo"] = photos.get(row["player_id"])
+
+        def top(key: str) -> list[dict]:
+            ranked = sorted((r for r in players.values() if r[key] > 0), key=lambda r: (-r[key], r["name"] or ""))
+            return ranked[:limit]
+
+        return {"top_scorers": top("goals"), "top_assists": top("assists")}
 
 
 tournament_crud = TournamentCRUD()
