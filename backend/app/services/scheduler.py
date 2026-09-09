@@ -498,14 +498,15 @@ async def calculate_pending_points():
     await _retry(_do_calculate_top8, "calculate_top8")
 
 
-async def _squads_next_run(now: datetime) -> datetime:
+async def _squads_next_run() -> datetime:
     """Primera corrida del sync de plantillas: 90 s tras arrancar, salvo que la última
     (`app_state.squads_synced_at`) tenga menos de SYNC_SQUADS_HOURS; entonces se espera
     a su vencimiento. Así un reinicio (recarga en desarrollo, redeploy) no repite las
-    ~36 peticiones. `/matches/sync-squads` (admin) sigue forzándolo cuando haga falta."""
+    ~36 peticiones. `/matches/sync-squads` (admin) sigue forzándolo cuando haga falta.
+    Todo en UTC-aware (la marca lo es): comparar con un `now` naive rompe el arranque."""
     async with AsyncSessionLocal() as db:
         last = await app_state_crud.get_squads_synced_at(db)
-    soon = now + timedelta(seconds=90)
+    soon = datetime.now(timezone.utc) + timedelta(seconds=90)
     if last is None:
         return soon
     return max(soon, as_utc(last) + timedelta(hours=settings.SYNC_SQUADS_HOURS))
@@ -525,7 +526,7 @@ async def start_scheduler():
     scheduler.add_job(calculate_pending_points, IntervalTrigger(minutes=settings.CALC_POINTS_MINUTES),   id="calc_points",     replace_existing=True, next_run_time=now + timedelta(seconds=60))
     # Plantillas: tras los fixtures (necesita los ids de equipo), refresco diario; si
     # el último sync es reciente, la primera corrida espera a su vencimiento.
-    scheduler.add_job(sync_players,             IntervalTrigger(hours=settings.SYNC_SQUADS_HOURS),       id="sync_players",    replace_existing=True, next_run_time=await _squads_next_run(now))
+    scheduler.add_job(sync_players,             IntervalTrigger(hours=settings.SYNC_SQUADS_HOURS),       id="sync_players",    replace_existing=True, next_run_time=await _squads_next_run())
     scheduler.start()
     logger.info("Scheduler started with 5 jobs.")
 

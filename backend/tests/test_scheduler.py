@@ -266,7 +266,11 @@ async def test_squads_next_run_defers_when_recent():
     vencimiento (un reinicio no repite las ~36 peticiones)."""
     now = datetime.now(timezone.utc)
     hours = scheduler_module.settings.SYNC_SQUADS_HOURS
-    assert await scheduler_module._squads_next_run(now) == now + timedelta(seconds=90)
+
+    def close(a: datetime, b: datetime) -> bool:
+        return abs(a - b) < timedelta(seconds=5)
+
+    assert close(await scheduler_module._squads_next_run(), now + timedelta(seconds=90))
 
     async def stamp(when: datetime) -> None:
         async with TestSessionLocal() as session:
@@ -274,9 +278,9 @@ async def test_squads_next_run_defers_when_recent():
             await session.commit()
 
     await stamp(now - timedelta(hours=1))
-    assert await scheduler_module._squads_next_run(now) == now + timedelta(hours=hours - 1)
+    assert close(await scheduler_module._squads_next_run(), now + timedelta(hours=hours - 1))
     await stamp(now - timedelta(hours=hours + 6))   # vencido: corre a los 90 s
-    assert await scheduler_module._squads_next_run(now) == now + timedelta(seconds=90)
+    assert close(await scheduler_module._squads_next_run(), now + timedelta(seconds=90))
 
 
 @pytest.mark.asyncio
