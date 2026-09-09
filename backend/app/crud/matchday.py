@@ -7,7 +7,7 @@ from app.models.prediction import Prediction
 from app.models.user import User
 from app.core.time import tz_day
 from app.schemas.matchday import (
-    MatchdayEntry, MatchdayUserPoints, MatchdaysSummary, MvpRankEntry, RoundEntry,
+    MatchdayEntry, MatchdayUserPoints, MatchdaysSummary, RoundEntry,
 )
 
 
@@ -27,11 +27,11 @@ class MatchdayCRUD:
     async def get_summary(self, db: AsyncSession, tz: tzinfo) -> MatchdaysSummary:
         """Puntos por participante y MVP(s) de cada día de partidos (en la zona del
         torneo) y de cada jornada completa (ronda de la API: 'League Stage - N',
-        martes a jueves; en eliminatorias, la fase con sus dos partidos), más el
-        ranking de MVPs del día. Solo cuenta predicciones ya calculadas de cuentas
-        activas. `complete`: todos los partidos del grupo terminaron (o se
-        pospusieron) y están puntuados, condición para compartir su MVP. Tres
-        consultas ligeras + agregación en Python (cross-DB); no hay N+1."""
+        martes a jueves; en eliminatorias, la fase con sus dos partidos). Solo cuenta
+        predicciones ya calculadas de cuentas activas. `complete`: todos los partidos
+        del grupo terminaron (o se pospusieron) y están puntuados, condición para
+        compartir su MVP y para contar en el histórico de MVPs (el ranking lo deriva
+        el cliente). Tres consultas ligeras + agregación en Python (cross-DB)."""
         matches = (await db.execute(
             select(Match.id, Match.match_date, Match.phase, Match.round_number, Match.status)
         )).all()
@@ -65,11 +65,8 @@ class MatchdayCRUD:
                 acc[1] += pts
 
         days: list[MatchdayEntry] = []
-        mvp_counts: dict[str, int] = defaultdict(int)
         for day in sorted(by_day):
             entries, top, mvps = _rank(by_day[day])
-            for tn in mvps:
-                mvp_counts[tn] += 1
             days.append(MatchdayEntry(
                 date=day, entries=entries, mvp_points=top, mvps=mvps,
                 complete=day not in incomplete_days,
@@ -85,11 +82,7 @@ class MatchdayCRUD:
                 complete=key not in incomplete_rounds,
             ))
 
-        mvp_ranking = sorted(
-            (MvpRankEntry(team_name=tn, count=c) for tn, c in mvp_counts.items()),
-            key=lambda r: (-r.count, r.team_name),
-        )
-        return MatchdaysSummary(days=days, rounds=rounds, mvp_ranking=mvp_ranking)
+        return MatchdaysSummary(days=days, rounds=rounds)
 
 
 matchday_crud = MatchdayCRUD()

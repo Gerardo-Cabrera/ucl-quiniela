@@ -112,8 +112,6 @@ async def test_matchdays_mvp(auth_client: AsyncClient):
     # Ambos participantes aparecen, ordenados por puntos desc.
     assert [e["team_name"] for e in day["entries"]] == ["Jax FC", "Megalink FC"]
     assert day["complete"] is True   # único partido del día: terminado y puntuado
-
-    assert data["mvp_ranking"] == [{"team_name": "Jax FC", "count": 1}]
     # Jornada completa (ronda 1 de la fase de liga): con un solo día coincide con él.
     assert len(data["rounds"]) == 1
     rnd = data["rounds"][0]
@@ -231,7 +229,7 @@ async def test_inactive_user_hidden_from_stats_and_matchdays(auth_client: AsyncC
 @pytest.mark.asyncio
 async def test_matchdays_empty(auth_client: AsyncClient):
     data = (await auth_client.get("/api/matchdays/")).json()
-    assert data == {"days": [], "rounds": [], "mvp_ranking": []}
+    assert data == {"days": [], "rounds": []}
 
 
 @pytest.mark.asyncio

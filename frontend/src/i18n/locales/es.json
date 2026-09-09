@@ -220,12 +220,13 @@
   },
   "mvps": {
     "title": "MVPs",
-    "subtitle": "El mejor de cada jornada",
-    "chronoTitle": "MVP por jornada",
+    "subtitle": "Histórico del mejor de cada día y de cada jornada completa",
+    "byDayTitle": "MVP por día",
+    "byRoundTitle": "MVP por jornada completa",
     "ranking": "Ranking de MVPs",
     "rankingEmpty": "Aún no hay MVPs.",
-    "emptyTitle": "Sin jornadas aún",
-    "emptyDescription": "El MVP de cada día aparecerá cuando haya partidos puntuados."
+    "emptyTitle": "Sin MVPs aún",
+    "emptyDescription": "Aparecerán cuando termine y se puntúe cada día o jornada completa."
   },
   "ranking": {
     "empty": "Sin datos aún."

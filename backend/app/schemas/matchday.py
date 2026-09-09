@@ -31,12 +31,8 @@ class RoundEntry(PointsGroup):
     end: date
 
 
-class MvpRankEntry(BaseModel):
-    team_name: str
-    count: int               # veces que fue MVP de un día
-
-
 class MatchdaysSummary(BaseModel):
+    """El ranking de MVPs (veces como MVP, por día o por jornada completa) lo deriva
+    el cliente de estas listas: no se calcula ni se envía aparte."""
     days: list[MatchdayEntry]        # cronológico ascendente
     rounds: list[RoundEntry]         # cronológico ascendente (por su primer día)
-    mvp_ranking: list[MvpRankEntry]  # MVPs del día: desc por count, desempate alfabético
