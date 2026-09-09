@@ -129,7 +129,8 @@ export default function MatchesPage() {
         <EmptyState icon="📅" title={t("matches.emptyTitle")} description={t("matches.emptyDescription")} />
       ) : (
         <div className="space-y-6">
-          {groupByDay(matches, (m) => m.match_date).map((group) => (
+          {/* Finalizados: del más reciente al más antiguo; el resto, cronológico. */}
+          {groupByDay(matches, (m) => m.match_date, status === "finished" ? "desc" : "asc").map((group) => (
             <section key={group.day}>
               <DayHeader date={group.date} />
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">

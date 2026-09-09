@@ -139,21 +139,25 @@ genera resumen, revisión y sugerencias, y responde a comandos en los comentario
 
 ## Sistema de Puntuación
 
+Los aciertos **se suman**: el marcador exacto implica el resultado (victoria o
+empate), así que un pleno en liga vale 8 + 5 = 13 pts (empate exacto 8 + 6 = 14) y
+16 con el primer goleador; en eliminatorias, 11 + 8 = 19 (11 + 9 = 20) y 24.
+
 ### Fase de Liga
 | Acierto | Puntos |
 |---------|--------|
 | Victoria | 5 pts |
 | Empate | 6 pts |
-| 1er Gol (primer goleador) | 3 pts |
-| Resultado Exacto | 8 pts |
+| Resultado Exacto (además del resultado) | +8 pts |
+| 1er Gol (primer goleador) | +3 pts |
 
-### A partir de Octavos
+### Eliminatorias (desde los play-offs)
 | Acierto | Puntos |
 |---------|--------|
 | Victoria | 8 pts |
 | Empate | 9 pts |
-| 1er Gol (primer goleador) | 5 pts |
-| Resultado Exacto | 11 pts |
+| Resultado Exacto (además del resultado) | +11 pts |
+| 1er Gol (primer goleador) | +5 pts |
 
 ### Top 8
 

@@ -96,14 +96,14 @@ async def test_calc_waits_for_first_goal():
 
 @pytest.mark.asyncio
 async def test_calc_scores_with_first_goal_known():
-    """Con el primer gol disponible: resultado exacto (8) + primer gol (3) = 11."""
+    """Con el primer gol disponible: exacto (8) + victoria (5) + primer gol (3) = 16."""
     pred_id = await _seed(first_goal_resolved=True, actual_scorer_id=10)
 
     await scheduler_module._do_calculate_points()
 
     pred = await _get_prediction(pred_id)
     assert pred.is_calculated is True
-    assert pred.points_earned == 11
+    assert pred.points_earned == 16
     assert pred.first_goal_points == 3   # desglose del primer gol (liga)
 
 
@@ -116,7 +116,7 @@ async def test_calc_zero_zero_does_not_wait():
 
     pred = await _get_prediction(pred_id)
     assert pred.is_calculated is True
-    assert pred.points_earned == 8  # resultado exacto en fase de liga
+    assert pred.points_earned == 14  # empate exacto en liga: 8 + 6
 
 
 @pytest.mark.asyncio
@@ -132,7 +132,7 @@ async def test_calc_grace_period_unblocks():
 
     pred = await _get_prediction(pred_id)
     assert pred.is_calculated is True
-    assert pred.points_earned == 8  # exacto, sin punto de primer gol
+    assert pred.points_earned == 13  # exacto + victoria, sin punto de primer gol
     assert pred.first_goal_points == 0
 
 
@@ -146,7 +146,7 @@ async def test_sync_first_goals_self_heals(monkeypatch):
     async with TestSessionLocal() as session:
         pred = await session.get(Prediction, pred_id)
         pred.is_calculated = True
-        pred.points_earned = 8
+        pred.points_earned = 13
         await session.commit()
 
     async def fake_fetch_events(fixture_id: int) -> list[dict]:
@@ -170,7 +170,7 @@ async def test_sync_first_goals_self_heals(monkeypatch):
 
     pred = await _get_prediction(pred_id)
     assert pred.is_calculated is True
-    assert pred.points_earned == 11  # ahora con el punto de primer gol
+    assert pred.points_earned == 16  # ahora con el punto de primer gol
     assert pred.first_goal_points == 3
 
 
