@@ -121,17 +121,19 @@ async def test_matchdays_mvp(auth_client: AsyncClient):
     assert rnd["mvps"] == ["Jax FC"] and rnd["mvp_points"] == 16 and rnd["complete"] is True
 
 
-async def _add_round_match(*, days_ago: int, round_number: int | None = None, phase=MatchPhase.LEAGUE,
+async def _add_round_match(*, ago: timedelta, round_number: int | None = None, phase=MatchPhase.LEAGUE,
                            status=MatchStatus.FINISHED, points: dict[int, int] | None = None,
                            calculated: bool = True) -> None:
     """Otro partido de la ronda (`round_number` en liga; en eliminatorias la `phase`)
-    hace `days_ago` días, con las predicciones (user_id -> puntos) indicadas."""
+    hace `ago`, con las predicciones (user_id -> puntos) indicadas. Para caer en el
+    mismo día que el partido de `_seed_scored_match` (hace 3 h) sea cual sea la hora
+    actual, usar el mismo instante: `ago=timedelta(hours=3)`."""
     async with TestSessionLocal() as session:
         match = Match(
-            api_fixture_id=7100 + days_ago, home_team="Bayern Munich", away_team="Manchester City",
+            api_fixture_id=7100 + int(ago.total_seconds() // 3600), home_team="Bayern Munich", away_team="Manchester City",
             home_score=1, away_score=0, first_goal_team="Bayern Munich",
             phase=phase, round_number=round_number, status=status,
-            match_date=datetime.now(timezone.utc) - timedelta(days=days_ago),
+            match_date=datetime.now(timezone.utc) - ago,
         )
         session.add(match)
         await session.flush()
@@ -149,7 +151,7 @@ async def test_matchdays_round_sums_its_days(auth_client: AsyncClient):
     no ser el de la jornada. Días: hace 2 días Megalink 13 / Jax 0; hoy Jax 16 /
     Megalink 0 → ronda: Jax 16, Megalink 13."""
     await _seed_scored_match()   # hoy: Jax 16, Megalink (user 2) 0
-    await _add_round_match(days_ago=2, round_number=1, points={1: 0, 2: 13})
+    await _add_round_match(ago=timedelta(days=2), round_number=1, points={1: 0, 2: 13})
 
     data = (await auth_client.get("/api/matchdays/")).json()
     assert [d["mvps"] for d in data["days"]] == [["Megalink FC"], ["Jax FC"]]
@@ -167,14 +169,14 @@ async def test_matchdays_incomplete_until_all_played_and_scored(auth_client: Asy
     terminado y estén puntuados: un partido de la ronda aún programado la deja
     incompleta (el día de hoy sigue completo); una predicción pendiente también."""
     await _seed_scored_match()
-    await _add_round_match(days_ago=-1, round_number=1, status=MatchStatus.SCHEDULED)   # mañana, misma ronda
+    await _add_round_match(ago=timedelta(days=-1), round_number=1, status=MatchStatus.SCHEDULED)   # mañana, misma ronda
 
     data = (await auth_client.get("/api/matchdays/")).json()
     assert data["days"][0]["complete"] is True
     assert data["rounds"][0]["complete"] is False
 
-    # Un partido terminado hoy pero con una predicción sin puntuar: el día tampoco.
-    await _add_round_match(days_ago=0, round_number=1, points={1: 0}, calculated=False)
+    # Un partido terminado el mismo día pero con una predicción sin puntuar: el día tampoco.
+    await _add_round_match(ago=timedelta(hours=3), round_number=1, points={1: 0}, calculated=False)
     data = (await auth_client.get("/api/matchdays/")).json()
     assert data["days"][0]["complete"] is False
 
@@ -185,8 +187,8 @@ async def test_matchdays_knockout_round_spans_both_legs(auth_client: AsyncClient
     miércoles de una semana) y la vuelta (la semana siguiente). Suma los puntos de
     ambas y no está completa hasta que se juega (y puntúa) la vuelta."""
     ko = MatchPhase.ROUND_OF_16
-    await _add_round_match(days_ago=7, phase=ko, points={1: 5})                                 # ida: hace una semana
-    await _add_round_match(days_ago=0, phase=ko, status=MatchStatus.SCHEDULED)                  # vuelta: pendiente
+    await _add_round_match(ago=timedelta(days=7), phase=ko, points={1: 5})                      # ida: hace una semana
+    await _add_round_match(ago=timedelta(0), phase=ko, status=MatchStatus.SCHEDULED)            # vuelta: pendiente
 
     data = (await auth_client.get("/api/matchdays/")).json()
     assert data["days"][0]["complete"] is True   # el día de la ida sí está completo
