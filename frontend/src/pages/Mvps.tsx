@@ -3,7 +3,7 @@ import { Crown } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useMatchdays } from "@/hooks";
 import { Card, Spinner, EmptyState, RankingCard, Pills } from "@/components/ui";
-import { mvpRanking, useMatchdayLabels, type MatchdayView } from "@/lib/matchdays";
+import { useMatchdayLabels, type MatchdayView } from "@/lib/matchdays";
 import type { PointsGroup } from "@/types";
 
 export default function Mvps() {
@@ -21,7 +21,8 @@ export default function Mvps() {
   }
 
   // Histórico: solo grupos ya completos (todos sus partidos jugados y puntuados; un
-  // grupo en curso aún puede cambiar de MVP) y con MVP, del más reciente al más antiguo.
+  // grupo en curso aún puede cambiar de MVP) y con MVP, del más reciente al más
+  // antiguo. El ranking (mismo criterio) viene calculado del backend.
   const rows: { key: string; label: string; group: PointsGroup }[] =
     view === "days"
       ? (data?.days ?? []).map((d) => ({ key: d.date, label: dayShort(d.date), group: d }))
@@ -67,7 +68,7 @@ export default function Mvps() {
           <RankingCard
             title={t("mvps.ranking")}
             icon={<Crown size={18} className="text-ucl-gold" />}
-            rows={mvpRanking(history.map((row) => row.group))}
+            rows={(view === "days" ? data!.day_mvp_ranking : data!.round_mvp_ranking).map((r) => ({ name: r.team_name, value: r.count }))}
             valueSuffix="×"
             emptyText={t("mvps.rankingEmpty")}
           />

@@ -19,5 +19,6 @@ async def get_matchdays_summary(
 ):
     """Resumen por día y por jornada completa (ronda): puntos de cada participante,
     MVP de cada grupo y si el grupo ya terminó (`complete`: habilita compartirlo y
-    cuenta en el histórico de MVPs). Alimenta las vistas Jornada y MVPs."""
+    cuenta en el histórico de MVPs), más los rankings de veces como MVP de un día y
+    de una jornada completa. Alimenta las vistas Jornada y MVPs."""
     return await matchday_crud.get_summary(db, _TOURNAMENT_TZ)

@@ -190,9 +190,15 @@ export interface RoundEntry extends PointsGroup {
   end: string;
 }
 
-/** El ranking de MVPs (por día o por jornada completa) se deriva en el cliente (lib/matchdays). */
+export interface MvpRankEntry {
+  team_name: string;
+  count: number;   // veces como MVP (solo grupos completos)
+}
+
 export interface MatchdaysSummary {
   days: MatchdayEntry[];
   rounds: RoundEntry[];
+  day_mvp_ranking: MvpRankEntry[];     // calculados en el backend
+  round_mvp_ranking: MvpRankEntry[];
 }
 

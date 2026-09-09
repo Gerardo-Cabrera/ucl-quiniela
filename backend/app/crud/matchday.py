@@ -7,7 +7,7 @@ from app.models.prediction import Prediction
 from app.models.user import User
 from app.core.time import tz_day
 from app.schemas.matchday import (
-    MatchdayEntry, MatchdayUserPoints, MatchdaysSummary, RoundEntry,
+    MatchdayEntry, MatchdayUserPoints, MatchdaysSummary, MvpRankEntry, PointsGroup, RoundEntry,
 )
 
 
@@ -23,6 +23,20 @@ def _rank(points: dict[int, list]) -> tuple[list[MatchdayUserPoints], int, list[
     return entries, top, mvps
 
 
+def _mvp_ranking(groups: list[PointsGroup]) -> list[MvpRankEntry]:
+    """Veces que cada equipo fue MVP en los grupos COMPLETOS (uno en curso aún puede
+    cambiar de MVP): desc por veces, desempate alfabético."""
+    counts: dict[str, int] = defaultdict(int)
+    for g in groups:
+        if g.complete:
+            for tn in g.mvps:
+                counts[tn] += 1
+    return sorted(
+        (MvpRankEntry(team_name=tn, count=c) for tn, c in counts.items()),
+        key=lambda r: (-r.count, r.team_name),
+    )
+
+
 class MatchdayCRUD:
     async def get_summary(self, db: AsyncSession, tz: tzinfo) -> MatchdaysSummary:
         """Puntos por participante y MVP(s) de cada día de partidos (en la zona del
@@ -30,8 +44,8 @@ class MatchdayCRUD:
         martes a jueves; en eliminatorias, la fase con sus dos partidos). Solo cuenta
         predicciones ya calculadas de cuentas activas. `complete`: todos los partidos
         del grupo terminaron (o se pospusieron) y están puntuados, condición para
-        compartir su MVP y para contar en el histórico de MVPs (el ranking lo deriva
-        el cliente). Tres consultas ligeras + agregación en Python (cross-DB)."""
+        compartir su MVP y para contar en el histórico y el ranking de MVPs. Tres
+        consultas ligeras + agregación en Python (cross-DB)."""
         matches = (await db.execute(
             select(Match.id, Match.match_date, Match.phase, Match.round_number, Match.status)
         )).all()
@@ -82,7 +96,10 @@ class MatchdayCRUD:
                 complete=key not in incomplete_rounds,
             ))
 
-        return MatchdaysSummary(days=days, rounds=rounds)
+        return MatchdaysSummary(
+            days=days, rounds=rounds,
+            day_mvp_ranking=_mvp_ranking(days), round_mvp_ranking=_mvp_ranking(rounds),
+        )
 
 
 matchday_crud = MatchdayCRUD()
