@@ -44,7 +44,8 @@ async def login(request: Request, data: UserLogin, db: AsyncSession = Depends(ge
     # El identificador puede ser el email, el alias o el nombre de equipo.
     user = await user_crud.get_by_identifier(db, data.identifier)
 
-    if not user or not verify_password(data.password, user.hashed_password):
+    # Una cuenta desactivada no entra (mismo 401 uniforme: no revela qué falló).
+    if not user or not user.is_active or not verify_password(data.password, user.hashed_password):
         raise HTTPException(status_code=401, detail="Credenciales incorrectas.")
 
     token = create_access_token({"sub": str(user.id)})

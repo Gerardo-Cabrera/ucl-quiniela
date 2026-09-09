@@ -39,7 +39,7 @@ async def lifespan(app: FastAPI):
     except Exception:
         logger.exception("Fallo aplicando migraciones al arrancar; se aborta el inicio.")
         raise
-    start_scheduler()
+    await start_scheduler()
     yield
     stop_scheduler()
     await close_client()

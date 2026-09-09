@@ -16,6 +16,7 @@ class MatchOut(BaseModel):
     penalty_home: Optional[int]
     penalty_away: Optional[int]
     elapsed: Optional[int]
+    elapsed_extra: Optional[int] = None   # descuento en curso: "90+3"
     first_goal_team: Optional[str]
     first_goal_player: Optional[str]
     # id del goleador real: la tarjeta marca el acierto del primer gol por id (como el scoring).

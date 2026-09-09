@@ -280,6 +280,7 @@ def parse_fixture(fixture_data: dict) -> dict | None:
         "penalty_home":     penalty.get("home"),
         "penalty_away":     penalty.get("away"),
         "elapsed":          f["status"].get("elapsed"),
+        "elapsed_extra":    f["status"].get("extra"),   # descuento en curso ("90+3")
         "phase":            phase,
         "status":           status,
         "match_date":       match_date,

@@ -124,6 +124,7 @@ async def delete_prediction(
     prediction = await prediction_crud.get_by_id_and_user(db, prediction_id, current_user.id)
     if not prediction:
         raise HTTPException(status_code=404, detail="Predicción no encontrada.")
-    if prediction.is_calculated:
-        raise HTTPException(status_code=400, detail="No se puede eliminar una predicción ya calculada.")
+    # Misma ventana que crear/editar: cerrado el plazo de la jornada (o empezado el
+    # partido) el pronóstico queda sellado, tampoco se borra.
+    await ensure_predictable(db, await match_crud.get_by_id(db, prediction.match_id), _TOURNAMENT_TZ)
     await prediction_crud.delete(db, prediction)

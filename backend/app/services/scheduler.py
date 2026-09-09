@@ -6,16 +6,17 @@ import asyncio
 from datetime import datetime, timedelta, timezone
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
-from sqlalchemy import select, update, or_, func
+from sqlalchemy import select, update, or_, and_, func
 from sqlalchemy.orm import selectinload
 from sqlalchemy.exc import SQLAlchemyError
 from httpx import HTTPStatusError, RequestError
 from app.database import AsyncSessionLocal
+from app.core.time import as_utc
 from app.models.match import Match, MatchPhase, MatchStatus
 from app.models.prediction import Prediction
 from app.services import ucl_api
 from app.services.scoring import calculate_match_points
-from app.crud import player_crud, team_crud, top8_crud
+from app.crud import player_crud, team_crud, top8_crud, app_state_crud
 from app.crud._upsert import upsert_by_key
 from app.config import settings
 import logging
@@ -302,6 +303,8 @@ async def _do_sync_players():
         # en su plantilla (bajas/traspasos tras el mercado). Los pronósticos guardan
         # id + nombre denormalizados, así que no se rompen.
         removed = await player_crud.delete_missing(db, fetched)
+        if fetched:   # marca del sync (ver _squads_next_run)
+            await app_state_crud.set_squads_synced_at(db, datetime.now(timezone.utc))
         await db.commit()
     logger.info("Synced %d players de %d equipos (%d bajas eliminadas).", count, len(fetched), removed)
 
@@ -320,19 +323,28 @@ async def sync_players():
 
 
 async def _do_sync_first_goals():
-    """Para cada partido finalizado con goles cuyos eventos aún no se procesaron,
-    los consulta UNA vez: guarda los goles (goleador + asistente; base de los
-    rankings de goleadores/asistidores) y resuelve el primer gol si no lo está.
-    También rellena los goles de partidos ya resueltos antes de guardarse."""
+    """Eventos (`/fixtures/events`) de los partidos EN VIVO o finalizados con algo
+    pendiente; una petición por partido y corrida:
+    - **primer gol** (`first_goal_team` nulo con goles en el marcador): en vivo, en
+      cuanto hay gol, para que la tarjeta lo muestre y marque el acierto sin esperar
+      al final; si la API aún no trae el evento, se reintenta en la siguiente corrida;
+    - **goles del partido** (`goal_events`, solo al finalizar): goleador + asistente,
+      base de goleadores/asistidores. Se rellenan también en partidos ya resueltos.
+    Se confía en los eventos: si al finalizar el primer gol cambió (gol anulado, otra
+    atribución) se corrige y las predicciones ya puntuadas se marcan para recálculo."""
     async with AsyncSessionLocal() as db:
         result = await db.execute(
             select(Match).where(
-                Match.status == MatchStatus.FINISHED,
-                or_(Match.first_goal_team.is_(None), Match.goal_events.is_(None)),
+                Match.status.in_((MatchStatus.LIVE, MatchStatus.FINISHED)),
                 Match.home_score.is_not(None),
                 Match.away_score.is_not(None),
-                # Partidos 0-0 no tienen primer gol: no consultar eventos.
-                (Match.home_score + Match.away_score) > 0,
+                # Algo pendiente: el primer gol, o los goles del partido al finalizar.
+                or_(
+                    Match.first_goal_team.is_(None),
+                    and_(Match.status == MatchStatus.FINISHED, Match.goal_events.is_(None)),
+                ),
+                # Solo si hubo gol (en el marcador, o ya registrado): los 0-0 no se consultan.
+                or_((Match.home_score + Match.away_score) > 0, Match.first_goal_team.is_not(None)),
             )
         )
         matches = result.scalars().all()
@@ -355,18 +367,18 @@ async def _do_sync_first_goals():
                     match.api_fixture_id, events,
                 )
                 continue
-            match.goal_events = ucl_api.parse_goal_events(events)
-            if match.first_goal_team is not None:
-                continue   # ya resuelto: solo faltaban los goles guardados (relleno)
-            scorer = ucl_api.get_first_goal_scorer(events)
-            if scorer is None:
-                continue
-            match.first_goal_team = scorer["team"]
-            match.first_goal_player_id = scorer["player_id"]
-            match.first_goal_player = scorer["player_name"]
+            if match.status == MatchStatus.FINISHED:
+                match.goal_events = ucl_api.parse_goal_events(events)
+            scorer = ucl_api.get_first_goal_scorer(events) or {}
+            if (scorer.get("team"), scorer.get("player_id")) == (match.first_goal_team, match.first_goal_player_id):
+                continue   # sin cambios (o aún sin gol en los eventos)
+            match.first_goal_team = scorer.get("team")
+            match.first_goal_player_id = scorer.get("player_id")
+            match.first_goal_player = scorer.get("player_name")
             updated += 1
-            # Auto-reparación: si alguna predicción ya fue puntuada sin este
-            # dato (p.ej. por el plazo de gracia), se recalcula en el próximo job.
+            # Auto-reparación: si alguna predicción ya fue puntuada con otro dato
+            # (p. ej. por el plazo de gracia, o un gol anulado tras puntuar), se
+            # recalcula en el próximo job.
             await db.execute(
                 update(Prediction)
                 .where(
@@ -377,12 +389,12 @@ async def _do_sync_first_goals():
             )
 
         await db.commit()
-        logger.info("Eventos procesados de %d partidos; primer gol resuelto en %d.", len(matches), updated)
+        logger.info("Eventos procesados de %d partidos; primer gol actualizado en %d.", len(matches), updated)
 
 
 async def sync_first_goals():
-    """Eventos de partidos finalizados con goles pendientes (primer gol o goles
-    guardados). Cada hora y tras cada sync de fixtures."""
+    """Eventos de partidos en vivo o finalizados con algo pendiente (primer gol o
+    goles guardados). Cada hora y tras cada sync de fixtures (en vivo, cada minuto)."""
     logger.info("Starting first goals sync...")
     await _retry(_do_sync_first_goals, "sync_first_goals")
 
@@ -486,7 +498,20 @@ async def calculate_pending_points():
     await _retry(_do_calculate_top8, "calculate_top8")
 
 
-def start_scheduler():
+async def _squads_next_run(now: datetime) -> datetime:
+    """Primera corrida del sync de plantillas: 90 s tras arrancar, salvo que la última
+    (`app_state.squads_synced_at`) tenga menos de SYNC_SQUADS_HOURS; entonces se espera
+    a su vencimiento. Así un reinicio (recarga en desarrollo, redeploy) no repite las
+    ~36 peticiones. `/matches/sync-squads` (admin) sigue forzándolo cuando haga falta."""
+    async with AsyncSessionLocal() as db:
+        last = await app_state_crud.get_squads_synced_at(db)
+    soon = now + timedelta(seconds=90)
+    if last is None:
+        return soon
+    return max(soon, as_utc(last) + timedelta(hours=settings.SYNC_SQUADS_HOURS))
+
+
+async def start_scheduler():
     # next_run_time: primera ejecución al arrancar (IntervalTrigger solo
     # dispararía tras el primer intervalo), escalonada para que los fixtures
     # lleguen antes que goles/puntos y sin golpear la API en paralelo.
@@ -498,8 +523,9 @@ def start_scheduler():
     scheduler.add_job(sync_teams,               IntervalTrigger(hours=settings.SYNC_TEAMS_HOURS),        id="sync_teams",      replace_existing=True, next_run_time=now + timedelta(seconds=15))
     scheduler.add_job(sync_first_goals,         IntervalTrigger(hours=settings.SYNC_GOALS_HOURS),        id="sync_goals",      replace_existing=True, next_run_time=now + timedelta(seconds=30))
     scheduler.add_job(calculate_pending_points, IntervalTrigger(minutes=settings.CALC_POINTS_MINUTES),   id="calc_points",     replace_existing=True, next_run_time=now + timedelta(seconds=60))
-    # Plantillas: tras los fixtures (necesita los ids de equipo), refresco diario.
-    scheduler.add_job(sync_players,             IntervalTrigger(hours=settings.SYNC_SQUADS_HOURS),       id="sync_players",    replace_existing=True, next_run_time=now + timedelta(seconds=90))
+    # Plantillas: tras los fixtures (necesita los ids de equipo), refresco diario; si
+    # el último sync es reciente, la primera corrida espera a su vencimiento.
+    scheduler.add_job(sync_players,             IntervalTrigger(hours=settings.SYNC_SQUADS_HOURS),       id="sync_players",    replace_existing=True, next_run_time=await _squads_next_run(now))
     scheduler.start()
     logger.info("Scheduler started with 5 jobs.")
 

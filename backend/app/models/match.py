@@ -44,6 +44,9 @@ class Match(Base):
     penalty_away: Mapped[int | None] = mapped_column(Integer, nullable=True)
     # Minuto de juego en vivo (API-Football status.elapsed); None fuera de juego.
     elapsed: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Minutos de descuento en curso (status.extra): con elapsed 45/90 la tarjeta muestra
+    # "45+2" / "90+3". En la prórroga elapsed sigue contando (91-120) y extra vuelve a None.
+    elapsed_extra: Mapped[int | None] = mapped_column(Integer, nullable=True)
     # Primer gol del partido (resuelto por el job de eventos). `first_goal_team`
     # se conserva para mostrarlo; `first_goal_player_id`/`first_goal_player` son el
     # goleador real (el id es contra lo que se puntúa el pronóstico).

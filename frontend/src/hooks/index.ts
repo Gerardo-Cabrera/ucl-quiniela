@@ -7,7 +7,6 @@ import { matchesApi, predictionsApi, leaderboardApi, top8Api, tournamentApi, con
 import { apiErrorMessage } from "@/lib/apiError";
 import { useAuthStore } from "@/store/authStore";
 import { LAST_ACTIVITY_KEY, SESSION_IDLE_MS } from "@/config";
-import type { MatchPhase, MatchStatus } from "@/types";
 
 /** onError reutilizable para mutaciones sin área de error propia: muestra el
  *  detalle del backend (o un mensaje genérico) en un toast, evitando fallos
@@ -79,10 +78,11 @@ export const useTeamsConfig = () =>
 
 // ── MATCHES ───────────────────────────────────────────────────────────────────
 
-export const useMatches = (filters?: { phase?: MatchPhase; status?: MatchStatus }) =>
+// Todos los partidos (las vistas filtran en cliente); en vivo cambian cada minuto.
+export const useMatches = () =>
   useQuery({
-    queryKey: ["matches", filters],
-    queryFn:  () => matchesApi.getAll(filters),
+    queryKey: ["matches"],
+    queryFn:  matchesApi.getAll,
     refetchInterval: 60_000, // refresca cada minuto
   });
 

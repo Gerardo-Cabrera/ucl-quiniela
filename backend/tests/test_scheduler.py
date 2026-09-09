@@ -33,6 +33,7 @@ async def _seed(
     home_score: int = 2,
     away_score: int = 1,
     first_goal_resolved: bool = False,
+    status: MatchStatus = MatchStatus.FINISHED,
     actual_scorer_id: int | None = 10,
     match_date: datetime | None = None,
     predicted_home: int = 2,
@@ -58,7 +59,7 @@ async def _seed(
             first_goal_team="Real Madrid" if first_goal_resolved else None,
             first_goal_player_id=actual_scorer_id if first_goal_resolved else None,
             phase=MatchPhase.LEAGUE,
-            status=MatchStatus.FINISHED,
+            status=status,
             match_date=match_date or datetime.now(timezone.utc) - timedelta(hours=3),
         )
         session.add(match)
@@ -254,6 +255,28 @@ async def test_sync_players_prunes_departed_and_keeps_failed_teams(monkeypatch):
         by_team.setdefault(tid, set()).add(pid)
     assert by_team[541] == {10, 12}   # baja eliminada, alta añadida
     assert by_team[529] == {20, 21}   # intacto: la petición falló
+    async with TestSessionLocal() as session:   # queda la marca del sync
+        assert await app_state_crud.get_squads_synced_at(session) is not None
+
+
+@pytest.mark.asyncio
+async def test_squads_next_run_defers_when_recent():
+    """Al arrancar, las plantillas se sincronizan a los 90 s salvo que el último sync
+    tenga menos de SYNC_SQUADS_HOURS: entonces la primera corrida espera a su
+    vencimiento (un reinicio no repite las ~36 peticiones)."""
+    now = datetime.now(timezone.utc)
+    hours = scheduler_module.settings.SYNC_SQUADS_HOURS
+    assert await scheduler_module._squads_next_run(now) == now + timedelta(seconds=90)
+
+    async def stamp(when: datetime) -> None:
+        async with TestSessionLocal() as session:
+            await app_state_crud.set_squads_synced_at(session, when)
+            await session.commit()
+
+    await stamp(now - timedelta(hours=1))
+    assert await scheduler_module._squads_next_run(now) == now + timedelta(hours=hours - 1)
+    await stamp(now - timedelta(hours=hours + 6))   # vencido: corre a los 90 s
+    assert await scheduler_module._squads_next_run(now) == now + timedelta(seconds=90)
 
 
 @pytest.mark.asyncio
@@ -519,3 +542,88 @@ async def test_sync_first_goals_backfills_goal_events_without_reset(monkeypatch)
     async with TestSessionLocal() as session:
         match = await session.get(Match, pred.match_id)
     assert match.goal_events and match.goal_events[0]["player_id"] == 10
+
+
+# ── PRIMER GOL EN VIVO ───────────────────────────────────────────────────────
+
+
+def _goal(pid: int, name: str, team: str, minute: int = 23) -> dict:
+    return {"time": {"elapsed": minute, "extra": None}, "type": "Goal", "detail": "Normal Goal",
+            "team": {"name": team}, "player": {"id": pid, "name": name}}
+
+
+@pytest.mark.asyncio
+async def test_sync_first_goals_resolves_live_match(monkeypatch):
+    """En vivo, con goles en el marcador, el primer gol se resuelve en cuanto la API
+    trae el evento (la tarjeta lo muestra y marca el acierto). Los goles del partido
+    (`goal_events`) se guardan solo al finalizar."""
+    pred_id = await _seed(status=MatchStatus.LIVE, home_score=1, away_score=0)
+
+    async def fake_fetch_events(fixture_id: int) -> list[dict]:
+        return [_goal(10, "Vinicius Jr", "Real Madrid")]
+
+    monkeypatch.setattr(ucl_api, "fetch_fixture_events", fake_fetch_events)
+    await scheduler_module._do_sync_first_goals()
+
+    pred = await _get_prediction(pred_id)
+    async with TestSessionLocal() as session:
+        match = await session.get(Match, pred.match_id)
+    assert (match.first_goal_team, match.first_goal_player_id, match.first_goal_player) == ("Real Madrid", 10, "Vinicius Jr")
+    assert match.goal_events is None
+
+
+@pytest.mark.asyncio
+async def test_sync_first_goals_skips_live_match_already_resolved(monkeypatch):
+    """Un partido en vivo con el primer gol ya resuelto no vuelve a consultarse
+    hasta que finaliza (entonces se guardan sus goles y se revalida)."""
+    await _seed(status=MatchStatus.LIVE, first_goal_resolved=True)
+    calls: list[int] = []
+
+    async def fake_fetch_events(fixture_id: int) -> list[dict]:
+        calls.append(fixture_id)
+        return []
+
+    monkeypatch.setattr(ucl_api, "fetch_fixture_events", fake_fetch_events)
+    await scheduler_module._do_sync_first_goals()
+    assert calls == []
+
+
+@pytest.mark.asyncio
+async def test_sync_first_goals_skips_goalless_match(monkeypatch):
+    """Sin goles en el marcador no hay primer gol que buscar: no se gasta cuota."""
+    await _seed(status=MatchStatus.LIVE, home_score=0, away_score=0)
+    calls: list[int] = []
+
+    async def fake_fetch_events(fixture_id: int) -> list[dict]:
+        calls.append(fixture_id)
+        return []
+
+    monkeypatch.setattr(ucl_api, "fetch_fixture_events", fake_fetch_events)
+    await scheduler_module._do_sync_first_goals()
+    assert calls == []
+
+
+@pytest.mark.asyncio
+async def test_sync_first_goals_corrects_on_finish(monkeypatch):
+    """Al finalizar se revalida el primer gol con los eventos definitivos: si cambió
+    (gol anulado, otra atribución) se corrige y la predicción ya puntuada se marca
+    para recálculo."""
+    pred_id = await _seed(first_goal_resolved=True)   # resuelto en vivo: Vinicius (10)
+    async with TestSessionLocal() as session:
+        pred = await session.get(Prediction, pred_id)
+        pred.is_calculated = True
+        pred.points_earned = 11
+        await session.commit()
+
+    async def fake_fetch_events(fixture_id: int) -> list[dict]:
+        return [_goal(20, "Lewandowski", "Barcelona", minute=30), _goal(10, "Vinicius Jr", "Real Madrid", minute=60)]
+
+    monkeypatch.setattr(ucl_api, "fetch_fixture_events", fake_fetch_events)
+    await scheduler_module._do_sync_first_goals()
+
+    pred = await _get_prediction(pred_id)
+    assert pred.is_calculated is False and pred.points_earned == 0
+    async with TestSessionLocal() as session:
+        match = await session.get(Match, pred.match_id)
+    assert (match.first_goal_team, match.first_goal_player_id) == ("Barcelona", 20)
+    assert [g["player_id"] for g in match.goal_events] == [20, 10]

@@ -33,6 +33,7 @@ export interface Match {
   penalty_home: number | null;
   penalty_away: number | null;
   elapsed: number | null;
+  elapsed_extra: number | null;   // descuento en curso: "90+3"
   first_goal_team: string | null;
   first_goal_player: string | null;
   first_goal_player_id: number | null;   // acierto del primer gol por id (como el scoring)

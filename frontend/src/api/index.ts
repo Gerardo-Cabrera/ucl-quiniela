@@ -2,14 +2,13 @@ import apiClient from "@/api/client";
 import type {
   Match, Prediction, PredictionOverride, LeaderboardEntry, Top8Pick, Player,
   TournamentPick, TournamentStats, StatsSummary, MatchdaysSummary,
-  MatchPhase, MatchStatus,
 } from "@/types";
 
 // ── MATCHES ───────────────────────────────────────────────────────────────────
 
 export const matchesApi = {
-  getAll: async (params?: { phase?: MatchPhase; status?: MatchStatus }): Promise<Match[]> => {
-    const { data } = await apiClient.get("/api/matches", { params });
+  getAll: async (): Promise<Match[]> => {
+    const { data } = await apiClient.get("/api/matches");
     return data;
   },
   getPlayers: async (id: number): Promise<Player[]> => {
