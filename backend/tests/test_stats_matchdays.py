@@ -121,15 +121,16 @@ async def test_matchdays_mvp(auth_client: AsyncClient):
     assert rnd["mvps"] == ["Jax FC"] and rnd["mvp_points"] == 16 and rnd["complete"] is True
 
 
-async def _add_round_match(*, days_ago: int, round_number: int, status=MatchStatus.FINISHED,
-                           points: dict[int, int] | None = None, calculated: bool = True) -> None:
-    """Otro partido de la ronda `round_number` hace `days_ago` días, con las
-    predicciones (user_id -> puntos) indicadas."""
+async def _add_round_match(*, days_ago: int, round_number: int | None = None, phase=MatchPhase.LEAGUE,
+                           status=MatchStatus.FINISHED, points: dict[int, int] | None = None,
+                           calculated: bool = True) -> None:
+    """Otro partido de la ronda (`round_number` en liga; en eliminatorias la `phase`)
+    hace `days_ago` días, con las predicciones (user_id -> puntos) indicadas."""
     async with TestSessionLocal() as session:
         match = Match(
             api_fixture_id=7100 + days_ago, home_team="Bayern Munich", away_team="Manchester City",
             home_score=1, away_score=0, first_goal_team="Bayern Munich",
-            phase=MatchPhase.LEAGUE, round_number=round_number, status=status,
+            phase=phase, round_number=round_number, status=status,
             match_date=datetime.now(timezone.utc) - timedelta(days=days_ago),
         )
         session.add(match)
@@ -176,6 +177,34 @@ async def test_matchdays_incomplete_until_all_played_and_scored(auth_client: Asy
     await _add_round_match(days_ago=0, round_number=1, points={1: 0}, calculated=False)
     data = (await auth_client.get("/api/matchdays/")).json()
     assert data["days"][0]["complete"] is False
+
+
+@pytest.mark.asyncio
+async def test_matchdays_knockout_round_spans_both_legs(auth_client: AsyncClient):
+    """En eliminatorias la jornada completa es la fase entera: la ida (martes y
+    miércoles de una semana) y la vuelta (la semana siguiente). Suma los puntos de
+    ambas y no está completa hasta que se juega (y puntúa) la vuelta."""
+    ko = MatchPhase.ROUND_OF_16
+    await _add_round_match(days_ago=7, phase=ko, points={1: 5})                                 # ida: hace una semana
+    await _add_round_match(days_ago=0, phase=ko, status=MatchStatus.SCHEDULED)                  # vuelta: pendiente
+
+    data = (await auth_client.get("/api/matchdays/")).json()
+    assert data["days"][0]["complete"] is True   # el día de la ida sí está completo
+    assert len(data["rounds"]) == 1
+    rnd = data["rounds"][0]
+    assert (rnd["phase"], rnd["round_number"], rnd["complete"]) == ("round_of_16", None, False)
+    assert rnd["start"] == data["days"][0]["date"] and rnd["end"] > rnd["start"]
+
+    # Jugada y puntuada la vuelta: una sola jornada completa con la suma de ambas.
+    async with TestSessionLocal() as session:
+        back = (await session.execute(select(Match).where(Match.api_fixture_id == 7100))).scalar_one()
+        back.status = MatchStatus.FINISHED
+        session.add(Prediction(user_id=1, match_id=back.id, predicted_home=1, predicted_away=0,
+                               points_earned=8, is_calculated=True))
+        await session.commit()
+    rnd = (await auth_client.get("/api/matchdays/")).json()["rounds"][0]
+    assert rnd["complete"] is True
+    assert [(e["team_name"], e["points"]) for e in rnd["entries"]] == [("Jax FC", 13)]
 
 
 @pytest.mark.asyncio
