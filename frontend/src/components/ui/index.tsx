@@ -169,10 +169,11 @@ export function TeamLogo({ src, alt = "", className = "w-6 h-6" }: {
     : <span className={clsx("rounded-full bg-ucl-blue/50 flex items-center justify-center shrink-0", className)}>⚽</span>;
 }
 
-/** Cabecera de fecha que agrupa tarjetas por día (Partidos y Mis Pronósticos). */
-export function DayHeader({ date }: { date: Date }) {
+/** Cabecera de fecha que agrupa tarjetas por jornada (Partidos, Mis Pronósticos y el
+ *  modal de otro participante). `className`: tamaño (text-xl por defecto). */
+export function DayHeader({ date, className }: { date: Date; className?: string }) {
   return (
-    <h2 className="font-display text-xl text-ucl-gold/90 border-b border-ucl-blue/30 pb-1 mb-3">
+    <h2 className={clsx("font-display text-ucl-gold/90 border-b border-ucl-blue/30 pb-1 mb-3", className ?? "text-xl")}>
       {formatDayHeading(date)}
     </h2>
   );
