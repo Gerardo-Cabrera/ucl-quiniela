@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { useStats } from "@/hooks";
 import { Card, Spinner, EmptyState, RankingCard } from "@/components/ui";
 import { ShareButton } from "@/components/ShareButton";
+import { bold, bulletWithDetail, shareText } from "@/lib/share";
 import type { UserCount } from "@/types";
 
 interface HitRow {
@@ -76,23 +77,27 @@ export default function Aciertos() {
     );
   }
 
-  // Texto para compartir: ranking de cada tipo de acierto y qué partidos fueron
-  // (marcador o goleador real) con quiénes acertaron. Solo secciones con datos.
-  const section = (title: string, ranking: UserCount[], detail: string[]) =>
-    ranking.length ? [title, ...ranking.map((u, i) => `${i + 1}. ${u.team_name} — ${u.count}`), ...detail, ""] : [];
-  const shareText = [
-    `${t("brand.appTitle")} · ${t("aciertos.title")}`, "",
-    ...section(t("aciertos.exactScore"), data!.exact_ranking,
-      data!.exact_matches.map((m) => `${m.home_team} ${m.score} ${m.away_team}: ${m.hitters.join(", ")}`)),
-    ...section(t("aciertos.firstScorer"), data!.first_goal_ranking,
-      data!.first_goal_matches.map((m) => `${m.home_team} ${t("common.vs")} ${m.away_team} — ${m.scorer ?? t("common.dash")}: ${m.hitters.join(", ")}`)),
-  ].join("\n").trim();
+  // Texto para compartir, por tipo de acierto (solo si hay datos): el ranking en un
+  // bloque y, en otro, cada partido acertado (marcador o goleador real) con quiénes
+  // acertaron en su propia línea.
+  const section = (title: string, ranking: UserCount[], detailTitle: string, detail: string[]) =>
+    ranking.length
+      ? [[bold(title), ...ranking.map((u, i) => `${i + 1}. ${u.team_name} — ${u.count}`)], [detailTitle, ...detail]]
+      : [];
+  const text = shareText(
+    `${t("brand.appTitle")} · ${t("aciertos.title")}`,
+    ...section(t("aciertos.exactScore"), data!.exact_ranking, t("aciertos.shareExactDetail"),
+      data!.exact_matches.map((m) => bulletWithDetail(`${m.home_team} ${m.score} ${m.away_team}`, m.hitters.join(", ")))),
+    ...section(t("aciertos.firstScorer"), data!.first_goal_ranking, t("aciertos.shareFirstGoalDetail"),
+      data!.first_goal_matches.map((m) =>
+        bulletWithDetail(`${m.home_team} ${t("common.vs")} ${m.away_team} — ${m.scorer ?? t("common.dash")}`, m.hitters.join(", ")))),
+  );
 
   return (
     <div className="space-y-6 animate-in">
       <div className="flex items-start justify-between gap-3">
         {header}
-        <ShareButton text={shareText} ariaLabel={t("aciertos.shareAria")} />
+        <ShareButton text={text} ariaLabel={t("aciertos.shareAria")} />
       </div>
 
       <div className="grid gap-6 md:grid-cols-2">

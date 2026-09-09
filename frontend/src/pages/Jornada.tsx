@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { useMatchdays } from "@/hooks";
 import { Card, Spinner, EmptyState, PointsChip, Pills } from "@/components/ui";
 import { ShareButton } from "@/components/ShareButton";
+import { bold, shareText } from "@/lib/share";
 import { useMatchdayLabels, type MatchdayView } from "@/lib/matchdays";
 import type { PointsGroup } from "@/types";
 import { clsx } from "clsx";
@@ -13,12 +14,11 @@ import { clsx } from "clsx";
 function GroupCard({ title, subtitle, group }: { title: string; subtitle?: string; group: PointsGroup }) {
   const { t } = useTranslation();
   const pts = (n: number) => `${n} ${t("common.pts")}`;
-  const shareText = [
+  const text = shareText(
     `${t("brand.appTitle")} · ${title}${subtitle ? ` (${subtitle})` : ""}`,
-    group.mvps.length ? `${t("jornada.mvpLabel")}: ${group.mvps.join(" · ")} — ${pts(group.mvp_points)}` : "",
-    "",
-    ...group.entries.map((e, i) => `${i + 1}. ${e.team_name} — ${pts(e.points)}`),
-  ].join("\n");
+    group.mvps.length ? [`${bold(t("jornada.mvpLabel") + ":")} ${group.mvps.join(" · ")} — ${pts(group.mvp_points)}`] : [],
+    group.entries.map((e, i) => `${i + 1}. ${e.team_name} — ${pts(e.points)}`),
+  );
 
   return (
     <Card>
@@ -34,7 +34,7 @@ function GroupCard({ title, subtitle, group }: { title: string; subtitle?: strin
             </span>
           )}
           <ShareButton
-            text={shareText}
+            text={text}
             ariaLabel={t("jornada.shareAria")}
             disabled={!group.complete}
             disabledTitle={t("jornada.shareLocked")}

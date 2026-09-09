@@ -204,7 +204,9 @@
     "topScore": "Marcador más repetido",
     "firstGoalByMatch": "Primer gol por partido",
     "exactByMatch": "Marcador exacto por partido",
-    "shareAria": "Compartir los aciertos por WhatsApp"
+    "shareAria": "Compartir los aciertos por WhatsApp",
+    "shareExactDetail": "Resultados acertados:",
+    "shareFirstGoalDetail": "Primeros goles acertados:"
   },
   "jornada": {
     "title": "Jornada",
