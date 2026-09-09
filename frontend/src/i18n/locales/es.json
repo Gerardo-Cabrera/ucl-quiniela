@@ -8,7 +8,8 @@
     "errorGeneric": "No se pudo completar la acción. Intenta de nuevo.",
     "firstGoal": "Primer gol",
     "firstGoalReal": "Primer gol real",
-    "noScorer": "sin goleador"
+    "noScorer": "sin goleador",
+    "share": "Compartir"
   },
   "brand": {
     "name": "UCL",
@@ -77,7 +78,6 @@
     "predictionsCount": "{{count}} pronósticos",
     "points": "PUNTOS",
     "classification": "Clasificación",
-    "share": "Compartir",
     "shareAria": "Compartir la tabla general por WhatsApp",
     "shareTitle": "UCL Quiniela · Tabla General",
     "you": "(tú)",
@@ -203,12 +203,18 @@
     "exactScoreEmpty": "Nadie ha acertado un marcador exacto todavía.",
     "topScore": "Marcador más repetido",
     "firstGoalByMatch": "Primer gol por partido",
-    "exactByMatch": "Marcador exacto por partido"
+    "exactByMatch": "Marcador exacto por partido",
+    "shareAria": "Compartir los aciertos por WhatsApp"
   },
   "jornada": {
     "title": "Jornada",
-    "subtitle": "Puntos de cada participante por día",
+    "subtitle": "Puntos de cada participante por día y por jornada completa",
+    "byDay": "Por día",
+    "byRound": "Jornada completa",
+    "round": "Jornada {{n}}",
     "mvpLabel": "MVP",
+    "shareAria": "Compartir el MVP por WhatsApp",
+    "shareLocked": "Se podrá compartir cuando terminen todos los partidos",
     "emptyTitle": "Sin jornadas puntuadas",
     "emptyDescription": "Los puntos por jornada aparecerán cuando haya partidos finalizados."
   },

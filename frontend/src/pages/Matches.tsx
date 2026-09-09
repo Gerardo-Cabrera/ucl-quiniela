@@ -4,7 +4,7 @@ import { useMatches, useMyPredictions, usePredictionOverride, useSetPredictionOv
 import { useAuthStore } from "@/store/authStore";
 import { MatchCard } from "@/components/MatchCard";
 import { PredictionModal } from "@/components/PredictionModal";
-import { Spinner, EmptyState, DayHeader } from "@/components/ui";
+import { Spinner, EmptyState, DayHeader, Pills } from "@/components/ui";
 import { groupByDay } from "@/lib/date";
 import type { Match, MatchPhase, MatchStatus } from "@/types";
 import { clsx } from "clsx";
@@ -88,38 +88,17 @@ export default function MatchesPage() {
 
       {/* Filters */}
       <div className="space-y-3">
-        <div className="flex gap-2 flex-wrap">
-          {PHASES.map((value) => (
-            <button
-              key={value}
-              onClick={() => setPhase(value)}
-              className={clsx(
-                "px-3 py-1.5 rounded-full text-xs font-mono transition-all duration-150",
-                phase === value
-                  ? "bg-ucl-gold text-ucl-navy font-bold"
-                  : "border border-ucl-blue/50 text-ucl-silver hover:border-ucl-gold hover:text-ucl-gold"
-              )}
-            >
-              {value === "all" ? t("matches.filterAll") : t(`matches.phaseFilter.${value}`)}
-            </button>
-          ))}
-        </div>
-        <div className="flex gap-2 flex-wrap">
-          {STATUSES.map((value) => (
-            <button
-              key={value}
-              onClick={() => setStatusChoice(value)}
-              className={clsx(
-                "px-3 py-1.5 rounded-full text-xs font-mono transition-all duration-150",
-                status === value
-                  ? "bg-ucl-blue text-ucl-white font-bold"
-                  : "border border-ucl-blue/50 text-ucl-silver hover:border-ucl-silver"
-              )}
-            >
-              {value === "all" ? t("matches.filterAll") : t(`matches.statusFilter.${value}`)}
-            </button>
-          ))}
-        </div>
+        <Pills
+          options={PHASES.map((v) => ({ value: v, label: v === "all" ? t("matches.filterAll") : t(`matches.phaseFilter.${v}`) }))}
+          value={phase}
+          onChange={setPhase}
+        />
+        <Pills
+          tone="blue"
+          options={STATUSES.map((v) => ({ value: v, label: v === "all" ? t("matches.filterAll") : t(`matches.statusFilter.${v}`) }))}
+          value={status}
+          onChange={setStatusChoice}
+        />
       </div>
 
       {/* Grid */}

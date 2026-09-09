@@ -435,8 +435,11 @@ async def test_delete_prediction_only_while_matchday_open(auth_client: AsyncClie
     cerrado (o partido empezado) → 400, el pronóstico queda sellado."""
     from app.models.prediction import Prediction
 
-    open_id   = await _create_match()   # mañana
-    closed_id = await _create_match(api_fixture_id=1002, match_date=datetime.now(timezone.utc) + timedelta(minutes=30))
+    # Días distintos pase lo que pase con la hora actual (cerca de medianoche
+    # "+30 min" ya es mañana): el abierto va a 3 días.
+    now = datetime.now(timezone.utc)
+    open_id   = await _create_match(match_date=now + timedelta(days=3))
+    closed_id = await _create_match(api_fixture_id=1002, match_date=now + timedelta(minutes=30))
     async with TestSessionLocal() as session:
         session.add_all([
             Prediction(user_id=1, match_id=open_id, predicted_home=1, predicted_away=0),

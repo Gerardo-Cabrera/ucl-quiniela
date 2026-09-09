@@ -38,6 +38,13 @@ def test_parse_elapsed_live():
     assert parsed["penalty_home"] is None
 
 
+def test_parse_round_number():
+    """La jornada de la fase de liga sale de la ronda 'League Stage - N'; las
+    eliminatorias no tienen número (se agrupan por fase)."""
+    assert ucl_api.parse_fixture(_fixture(round_="League Stage - 3"))["round_number"] == 3
+    assert ucl_api.parse_fixture(_fixture(round_="Round of 16"))["round_number"] is None
+
+
 def test_parse_stoppage_time():
     """Descuento: la API deja `elapsed` en 45/90 y cuenta el añadido en `extra`
     (la tarjeta muestra "90+3"); en la prórroga `elapsed` sigue (91-120)."""

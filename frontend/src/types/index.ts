@@ -170,11 +170,24 @@ export interface MatchdayUserPoints {
   points: number;
 }
 
-export interface MatchdayEntry {
-  date: string;
+/** Puntos de un grupo de partidos: un día o una jornada completa. */
+export interface PointsGroup {
   entries: MatchdayUserPoints[];
   mvp_points: number;
   mvps: string[];
+  complete: boolean;   // todos los partidos terminados y puntuados: se puede compartir
+}
+
+export interface MatchdayEntry extends PointsGroup {
+  date: string;
+}
+
+/** Jornada completa: 'League Stage - N' (martes a jueves) o, en eliminatorias, la fase. */
+export interface RoundEntry extends PointsGroup {
+  phase: MatchPhase;
+  round_number: number | null;
+  start: string;   // primer y último día con partidos
+  end: string;
 }
 
 export interface MvpRankEntry {
@@ -184,6 +197,7 @@ export interface MvpRankEntry {
 
 export interface MatchdaysSummary {
   days: MatchdayEntry[];
+  rounds: RoundEntry[];
   mvp_ranking: MvpRankEntry[];
 }
 

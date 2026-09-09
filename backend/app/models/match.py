@@ -58,6 +58,9 @@ class Match(Base):
     # goleadores/asistidores de la quiniela (fase de liga en adelante) sin cuota extra.
     goal_events: Mapped[list[dict] | None] = mapped_column(JSON, nullable=True)
 
+    # Jornada de la fase de liga (ronda 'League Stage - N' de la API); None en
+    # eliminatorias. Agrupa los días (martes a jueves) en la "jornada completa".
+    round_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
     phase: Mapped[MatchPhase] = mapped_column(SAEnum(MatchPhase), default=MatchPhase.LEAGUE)
     status: Mapped[MatchStatus] = mapped_column(SAEnum(MatchStatus), default=MatchStatus.SCHEDULED)
 
