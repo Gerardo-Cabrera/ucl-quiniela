@@ -35,10 +35,10 @@ async def _seed_scored_match():
         await session.flush()
 
         session.add_all([
-            # Jax FC (user 1): marcador exacto + primer goleador → 11 pts
+            # Jax FC (user 1): marcador exacto + victoria + primer goleador → 16 pts
             Prediction(user_id=1, match_id=match.id, predicted_home=2, predicted_away=1,
                        first_goal_player_id=10, first_goal_player="Vinicius Jr",
-                       points_earned=11, is_calculated=True),
+                       points_earned=16, is_calculated=True),
             # Megalink FC: falla marcador y goleador → 0 pts
             Prediction(user_id=rival.id, match_id=match.id, predicted_home=0, predicted_away=0,
                        first_goal_player_id=20, first_goal_player="Lewandowski",
@@ -107,7 +107,7 @@ async def test_matchdays_mvp(auth_client: AsyncClient):
 
     assert len(data["days"]) == 1
     day = data["days"][0]
-    assert day["mvp_points"] == 11
+    assert day["mvp_points"] == 16
     assert day["mvps"] == ["Jax FC"]
     # Ambos participantes aparecen, ordenados por puntos desc.
     assert [e["team_name"] for e in day["entries"]] == ["Jax FC", "Megalink FC"]

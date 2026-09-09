@@ -51,24 +51,24 @@ class TestLeagueScoring:
         return calculate_match_points(**defaults)
 
     def test_exact_score(self):
-        """Resultado exacto: 8 pts en liga."""
+        """Marcador exacto: 8 (exacto) + 5 (victoria) = 13 pts en liga."""
         r = self._calc(
             predicted_home=2, predicted_away=1,
             actual_home=2, actual_away=1,
         )
         assert r["exact"] == LEAGUE_POINTS["exact"]
-        assert r["outcome"] == 0
-        assert r["total"] == LEAGUE_POINTS["exact"]
+        assert r["outcome"] == LEAGUE_POINTS["win"]
+        assert r["total"] == 13
 
     def test_exact_draw(self):
-        """Empate exacto: 8 pts (no 6 de empate)."""
+        """Empate exacto: 8 (exacto) + 6 (empate) = 14 pts."""
         r = self._calc(
             predicted_home=1, predicted_away=1,
             actual_home=1, actual_away=1,
         )
         assert r["exact"] == LEAGUE_POINTS["exact"]
-        assert r["outcome"] == 0
-        assert r["total"] == LEAGUE_POINTS["exact"]
+        assert r["outcome"] == LEAGUE_POINTS["draw"]
+        assert r["total"] == 14
 
     def test_correct_winner_wrong_score(self):
         """Acierta ganador, falla marcador: 5 pts."""
@@ -150,23 +150,24 @@ class TestLeagueScoring:
         assert r["first_goal"] == 0
 
     def test_exact_plus_first_goal(self):
-        """Resultado exacto + primer gol = max pts en liga."""
+        """Máximo en liga: exacto 8 + victoria 5 + primer gol 3 = 16."""
         r = self._calc(
             predicted_home=2, predicted_away=1,
             predicted_first_goal_player_id=33,
             actual_home=2, actual_away=1,
             actual_first_goal_player_id=33,
         )
-        assert r["total"] == LEAGUE_POINTS["exact"] + LEAGUE_POINTS["first_goal"]
+        assert r["total"] == LEAGUE_POINTS["exact"] + LEAGUE_POINTS["win"] + LEAGUE_POINTS["first_goal"]
+        assert r["total"] == 16
 
-    def test_exact_and_outcome_mutually_exclusive(self):
-        """Exacto y victoria/empate son mutuamente excluyentes."""
+    def test_exact_adds_outcome(self):
+        """El exacto no sustituye al resultado: ambos se suman."""
         r = self._calc(
             predicted_home=3, predicted_away=1,
             actual_home=3, actual_away=1,
         )
         assert r["exact"] == LEAGUE_POINTS["exact"]
-        assert r["outcome"] == 0
+        assert r["outcome"] == LEAGUE_POINTS["win"]
 
 
 # ── KNOCKOUT PHASE SCORING ───────────────────────────────────────────────────
@@ -191,7 +192,7 @@ class TestKnockoutScoring:
             phase=phase,
         )
         assert r["exact"] == KNOCKOUT_POINTS["exact"]
-        assert r["total"] == KNOCKOUT_POINTS["exact"]
+        assert r["total"] == KNOCKOUT_POINTS["exact"] + KNOCKOUT_POINTS["win"]   # 11 + 8
 
     def test_correct_winner_knockout(self):
         r = calculate_match_points(
@@ -222,10 +223,10 @@ class TestKnockoutScoring:
             phase=MatchPhase.SEMI_FINALS,
         )
         assert r["first_goal"] == KNOCKOUT_POINTS["first_goal"]
-        assert r["total"] == KNOCKOUT_POINTS["exact"] + KNOCKOUT_POINTS["first_goal"]
+        assert r["total"] == KNOCKOUT_POINTS["exact"] + KNOCKOUT_POINTS["win"] + KNOCKOUT_POINTS["first_goal"]
 
     def test_max_knockout_points(self):
-        """Max en final: exacto 11 + primer gol 5 = 16."""
+        """Máximo en final: exacto 11 + victoria 8 + primer gol 5 = 24."""
         r = calculate_match_points(
             predicted_home=2, predicted_away=1,
             predicted_first_goal_player_id=44,
@@ -233,8 +234,8 @@ class TestKnockoutScoring:
             actual_first_goal_player_id=44,
             phase=MatchPhase.FINAL,
         )
-        assert r["total"] == KNOCKOUT_POINTS["exact"] + KNOCKOUT_POINTS["first_goal"]
-        assert r["total"] == 16
+        assert r["total"] == KNOCKOUT_POINTS["exact"] + KNOCKOUT_POINTS["win"] + KNOCKOUT_POINTS["first_goal"]
+        assert r["total"] == 24
 
 
 # ── TOP 8 SCORING ────────────────────────────────────────────────────────────
