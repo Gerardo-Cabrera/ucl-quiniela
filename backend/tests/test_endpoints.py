@@ -115,6 +115,19 @@ async def test_login_by_team_name(client: AsyncClient):
 
 
 @pytest.mark.asyncio
+async def test_login_inactive_user_rejected(client: AsyncClient):
+    """Una cuenta desactivada (is_active=False) no puede iniciar sesión (401 uniforme)."""
+    from app.models.user import User
+
+    user_id = (await _register(client)).json()["id"]
+    async with TestSessionLocal() as session:
+        (await session.get(User, user_id)).is_active = False
+        await session.commit()
+    resp = await client.post("/api/auth/login", json={"identifier": "login@test.com", "password": "pass1234"})
+    assert resp.status_code == 401
+
+
+@pytest.mark.asyncio
 async def test_login_wrong_password(client: AsyncClient):
     await _register(client, email="wrong@test.com", team_name="Wrong Team", alias="wrongalias")
     resp = await client.post("/api/auth/login", json={"identifier": "wrong@test.com", "password": "incorrectpass"})
@@ -414,6 +427,25 @@ async def test_leaderboard_ties_share_rank(auth_client: AsyncClient):
         ("Genkidama F.C", 2, 0),
         ("Megalink FC", 2, 0),
     ]
+
+
+@pytest.mark.asyncio
+async def test_delete_prediction_only_while_matchday_open(auth_client: AsyncClient):
+    """Borrar sigue la misma ventana que crear/editar: jornada abierta → 204; plazo
+    cerrado (o partido empezado) → 400, el pronóstico queda sellado."""
+    from app.models.prediction import Prediction
+
+    open_id   = await _create_match()   # mañana
+    closed_id = await _create_match(api_fixture_id=1002, match_date=datetime.now(timezone.utc) + timedelta(minutes=30))
+    async with TestSessionLocal() as session:
+        session.add_all([
+            Prediction(user_id=1, match_id=open_id, predicted_home=1, predicted_away=0),
+            Prediction(user_id=1, match_id=closed_id, predicted_home=1, predicted_away=0),
+        ])
+        await session.commit()
+    by_match = {p["match_id"]: p["id"] for p in (await auth_client.get("/api/predictions/")).json()}
+    assert (await auth_client.delete(f"/api/predictions/{by_match[open_id]}")).status_code == 204
+    assert (await auth_client.delete(f"/api/predictions/{by_match[closed_id]}")).status_code == 400
 
 
 @pytest.mark.asyncio
@@ -754,10 +786,26 @@ async def test_tournament_players_list(auth_client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_tournament_stats_empty_until_synced(auth_client: AsyncClient):
-    resp = await auth_client.get("/api/tournament/stats")
-    assert resp.status_code == 200
-    assert resp.json() == {"top_scorers": [], "top_assists": []}
+async def test_tournament_stats_from_goal_events(auth_client: AsyncClient):
+    """Goleadores/asistidores se agregan de los goles guardados por partido
+    FINALIZADO (fase de liga en adelante); vacíos si aún no hay goles."""
+    assert (await auth_client.get("/api/tournament/stats")).json() == {"top_scorers": [], "top_assists": []}
+
+    def goal(pid, name, aid, aname):
+        return {"player_id": pid, "player": name, "assist_id": aid, "assist": aname, "team": "Real Madrid"}
+
+    past = datetime.now(timezone.utc) - timedelta(days=1)
+    await _create_match(api_fixture_id=3001, status=MatchStatus.FINISHED, home_score=2, away_score=0, match_date=past,
+                        goal_events=[goal(10, "Vinicius Jr", 11, "Bellingham"), goal(10, "Vinicius Jr", None, None)])
+    await _create_match(api_fixture_id=3002, status=MatchStatus.FINISHED, home_score=1, away_score=0, match_date=past,
+                        goal_events=[goal(11, "Bellingham", 10, "Vinicius Jr")])
+    # Un partido no finalizado no cuenta aunque tenga goles guardados.
+    await _create_match(api_fixture_id=3003, goal_events=[goal(21, "Lamine Yamal", None, None)])
+
+    data = (await auth_client.get("/api/tournament/stats")).json()
+    assert [(r["name"], r["goals"], r["assists"]) for r in data["top_scorers"]] == [("Vinicius Jr", 2, 1), ("Bellingham", 1, 1)]
+    assert [(r["name"], r["assists"]) for r in data["top_assists"]] == [("Bellingham", 1), ("Vinicius Jr", 1)]
+    assert "photo" in data["top_scorers"][0]
 
 
 @pytest.mark.asyncio

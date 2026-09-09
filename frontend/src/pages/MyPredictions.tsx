@@ -97,7 +97,7 @@ export default function MyPredictionsPage() {
                 <div className="shrink-0 flex items-center gap-2">
                   {pred.is_calculated ? (
                     <PointsChip points={pred.points_earned} />
-                  ) : !pred.is_calculated && match.status === "scheduled" ? (
+                  ) : match.predictable ? (   /* borrable solo mientras la jornada sigue abierta */
                     <button
                       onClick={() => deletePred(pred.id)}
                       className="text-ucl-silver/30 hover:text-red-400 transition-colors p-1"

@@ -16,10 +16,10 @@ from tests.conftest import TestSessionLocal
 
 
 def _fixture(*, fid=8001, status="1H", elapsed=55, home_goals=1, away_goals=0,
-             round_="League Stage", pen_home=None, pen_away=None, minutes_ago=5):
+             round_="League Stage", pen_home=None, pen_away=None, minutes_ago=5, extra=None):
     date = (datetime.now(timezone.utc) - timedelta(minutes=minutes_ago)).isoformat()
     return {
-        "fixture": {"id": fid, "date": date, "status": {"short": status, "elapsed": elapsed}},
+        "fixture": {"id": fid, "date": date, "status": {"short": status, "elapsed": elapsed, "extra": extra}},
         "teams": {"home": {"id": 541, "name": "Real Madrid", "logo": "h.png"},
                   "away": {"id": 529, "name": "Barcelona", "logo": "a.png"}},
         "goals": {"home": home_goals, "away": away_goals},
@@ -34,7 +34,15 @@ def test_parse_elapsed_live():
     parsed = ucl_api.parse_fixture(_fixture(status="1H", elapsed=67))
     assert parsed["status"] == MatchStatus.LIVE
     assert parsed["elapsed"] == 67
+    assert parsed["elapsed_extra"] is None
     assert parsed["penalty_home"] is None
+
+
+def test_parse_stoppage_time():
+    """Descuento: la API deja `elapsed` en 45/90 y cuenta el añadido en `extra`
+    (la tarjeta muestra "90+3"); en la prórroga `elapsed` sigue (91-120)."""
+    parsed = ucl_api.parse_fixture(_fixture(status="2H", elapsed=90, extra=3))
+    assert (parsed["elapsed"], parsed["elapsed_extra"]) == (90, 3)
 
 
 def test_parse_penalties():

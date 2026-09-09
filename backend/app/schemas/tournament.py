@@ -22,14 +22,14 @@ class TournamentPredictionOut(BaseModel):
 
 
 class TopPlayerOut(BaseModel):
-    """Fila de los rankings de goleadores/asistidores (ver `ucl_api.parse_top_player`)."""
+    """Fila de los rankings de goleadores/asistidores, agregados de los goles guardados
+    por partido (`Match.goal_events`)."""
     player_id: Optional[int] = None
     name: str
     photo: Optional[str] = None
     team: Optional[str] = None
     goals: int
     assists: int
-    matches: int
 
 
 class TournamentStatsOut(BaseModel):

@@ -9,7 +9,7 @@ from app.schemas.tournament import (
 )
 from app.schemas.player import PlayerOut
 from app.core.deps import get_current_user, get_admin_user
-from app.crud import tournament_crud, player_crud, match_crud, app_state_crud
+from app.crud import tournament_crud, player_crud, match_crud
 
 router = APIRouter(prefix="/tournament", tags=["Tournament"])
 
@@ -29,9 +29,9 @@ async def get_tournament_stats(
     db: AsyncSession = Depends(get_db),
     _: User = Depends(get_current_user),
 ):
-    """Goleadores y asistidores de la temporada (rankings sincronizados desde la API;
-    listas vacías hasta que haya partidos finalizados)."""
-    return await app_state_crud.get_tournament_stats(db)
+    """Goleadores y asistidores de la quiniela (fase de liga en adelante), agregados
+    de los goles guardados por partido finalizado; listas vacías hasta que haya goles."""
+    return await tournament_crud.get_leaders(db)
 
 
 async def _resolve_player(db: AsyncSession, player_id: int | None) -> tuple[int | None, str | None]:

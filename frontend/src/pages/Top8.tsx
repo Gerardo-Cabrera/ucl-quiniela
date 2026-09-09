@@ -128,9 +128,7 @@ function LeadersList({ title, icon, rows, stat }: {
                 : <span className="w-7 h-7 shrink-0" />}
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium truncate">{r.name}</p>
-                <p className="text-xs text-ucl-silver/50 truncate">
-                  {r.team} · {t("tournament.played", { count: r.matches })}
-                </p>
+                <p className="text-xs text-ucl-silver/50 truncate">{r.team}</p>
               </div>
               <span className="font-display text-2xl text-ucl-gold shrink-0">{r[stat]}</span>
             </div>

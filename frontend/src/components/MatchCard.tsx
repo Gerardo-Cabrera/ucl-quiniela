@@ -63,9 +63,11 @@ export function MatchCard({ match, prediction, onPredict }: MatchCardProps) {
               {t("matchCard.penalties", { home: match.penalty_home, away: match.penalty_away })}
             </span>
           )}
-          {/* Minuto en vivo */}
+          {/* Minuto en vivo; en el descuento, "45+2" / "90+3" (la prórroga sigue: 91′…120′) */}
           {match.status === "live" && match.elapsed != null ? (
-            <span className="text-xs text-red-400 font-mono font-semibold">{match.elapsed}′</span>
+            <span className="text-xs text-red-400 font-mono font-semibold">
+              {match.elapsed}{match.elapsed_extra ? `+${match.elapsed_extra}` : ""}′
+            </span>
           ) : (
             <span className="text-xs text-ucl-silver/50 font-mono">
               {format(new Date(match.match_date), "d MMM · HH:mm", { locale: es })}

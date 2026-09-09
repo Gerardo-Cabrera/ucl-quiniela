@@ -187,11 +187,10 @@
     "locked": "🔒 Tu MVP y máximo goleador ya fueron calculados y no pueden modificarse.",
     "lockedRound16": "🔒 Los octavos de final ya comenzaron: tu MVP y máximo goleador son inmodificables.",
     "statsTitle": "Goleadores y asistidores",
-    "statsSubtitle": "Rankings de la temporada actual de la Champions; se actualizan al terminar cada partido. Referencia para elegir tu MVP y tu máximo goleador.",
+    "statsSubtitle": "Goles y asistencias en los partidos de la quiniela (fase de liga en adelante); se actualizan al resolverse cada partido. Referencia para elegir tu MVP y tu máximo goleador.",
     "scorers": "Goleadores",
     "assists": "Asistidores",
-    "statsEmpty": "Aún no hay partidos finalizados.",
-    "played": "{{count}} PJ"
+    "statsEmpty": "Aún no hay goles en partidos finalizados."
   },
   "aciertos": {
     "title": "Aciertos",

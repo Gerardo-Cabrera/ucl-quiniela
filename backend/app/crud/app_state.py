@@ -1,3 +1,4 @@
+from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.app_state import AppState
 
@@ -34,17 +35,12 @@ class AppStateCRUD:
         state.top8_actual = list(teams)
         await db.flush()
 
-    async def get_tournament_stats(self, db: AsyncSession) -> dict[str, list[dict]]:
-        """Rankings de goleadores y asistidores (listas vacías hasta el primer sync)."""
-        state = await self.get(db)
-        return {"top_scorers": state.top_scorers or [], "top_assists": state.top_assists or []}
+    async def get_squads_synced_at(self, db: AsyncSession) -> datetime | None:
+        return (await self.get(db)).squads_synced_at
 
-    async def set_tournament_stats(
-        self, db: AsyncSession, scorers: list[dict], assists: list[dict]
-    ) -> None:
+    async def set_squads_synced_at(self, db: AsyncSession, when: datetime) -> None:
         state = await self.get(db)
-        state.top_scorers = scorers
-        state.top_assists = assists
+        state.squads_synced_at = when
         await db.flush()
 
 
