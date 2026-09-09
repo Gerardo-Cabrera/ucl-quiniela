@@ -1,13 +1,10 @@
 import { createPortal } from "react-dom";
 import { X, Award, Goal } from "lucide-react";
-import { format } from "date-fns";
-import { es } from "date-fns/locale";
 import { useTranslation } from "react-i18next";
 import { useUserPredictions, useUserTop8, useUserTournament, useActualTop8 } from "@/hooks";
 import { top8Hits } from "@/lib/top8";
-import { Spinner, EmptyState, PointsChip, Badge, TeamLogo } from "@/components/ui";
-import { FirstGoalLine } from "@/components/FirstGoalLine";
-import { clsx } from "clsx";
+import { Spinner, EmptyState, PointsChip } from "@/components/ui";
+import { PredictionsByDay } from "@/components/PredictionCard";
 
 interface Props {
   userId: number;
@@ -108,68 +105,8 @@ export function UserPredictionsModal({ userId, teamName, onClose }: Props) {
             {hasPreds && (
               <section>
                 <h3 className="font-display text-lg text-ucl-gold/90 mb-2">{t("userPredictions.predictionsTitle")}</h3>
-                <div className="space-y-3">
-            {predictions!.map((pred) => {
-              const match = pred.match;
-              const isExact =
-                pred.is_calculated &&
-                pred.predicted_home === match.home_score &&
-                pred.predicted_away === match.away_score;
-
-              return (
-                <div
-                  key={pred.id}
-                  className={clsx(
-                    "card px-4 py-3",
-                    isExact && "border-ucl-gold/30 shadow-[0_0_16px_rgba(201,168,76,0.08)]"
-                  )}
-                >
-                  <div className="flex items-center gap-3">
-                  {/* Match info: cada escudo junto a su equipo */}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium flex items-center gap-1.5 flex-wrap">
-                      <TeamLogo src={match.home_team_logo} className="w-5 h-5" />{match.home_team}
-                      <span className="text-ucl-silver/40">{t("common.vs")}</span>
-                      <TeamLogo src={match.away_team_logo} className="w-5 h-5" />{match.away_team}
-                    </p>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <span className="text-xs text-ucl-silver/50 font-mono">
-                        {format(new Date(match.match_date), "d MMM", { locale: es })}
-                      </span>
-                      <Badge variant={match.phase === "league" ? "blue" : "gold"}>
-                        {t(`phase.${match.phase}`)}
-                      </Badge>
-                    </div>
-                  </div>
-
-                  {/* Prediction */}
-                  <div className="text-center shrink-0">
-                    <p className={clsx(
-                      "font-mono font-bold text-lg",
-                      isExact ? "text-ucl-gold" : "text-ucl-white"
-                    )}>
-                      {pred.predicted_home} - {pred.predicted_away}
-                    </p>
-                    {match.status === "finished" && (
-                      <p className="text-xs text-ucl-silver/50 font-mono">
-                        {t("predictions.real", { home: match.home_score, away: match.away_score })}
-                      </p>
-                    )}
-                  </div>
-
-                  {/* Points */}
-                  {pred.is_calculated && (
-                    <div className="shrink-0">
-                      <PointsChip points={pred.points_earned} />
-                    </div>
-                  )}
-                  </div>
-                  {/* Primer gol en su propia fila a todo el ancho: etiquetas completas sin recortar. */}
-                  <FirstGoalLine prediction={pred} match={match} className="mt-3" />
-                </div>
-              );
-            })}
-                </div>
+                {/* Misma tarjeta que Mis Pronósticos, agrupada por jornada (subtítulo con la fecha). */}
+                <PredictionsByDay predictions={predictions!} headerClassName="text-base" />
               </section>
             )}
           </div>

@@ -66,7 +66,7 @@
 
   /* Badge de fase */
   .phase-badge {
-    @apply text-xs font-mono px-2 py-0.5 rounded-full border;
+    @apply text-xs font-mono px-2 py-0.5 rounded-full border whitespace-nowrap;
   }
 
   /* Rank número top 3 */
