@@ -194,7 +194,7 @@
   },
   "aciertos": {
     "title": "Aciertos",
-    "subtitle": "Primer goleador y marcador exacto",
+    "subtitle": "Marcador exacto y primer goleador",
     "emptyTitle": "Sin aciertos aún",
     "emptyDescription": "Aparecerán cuando haya partidos finalizados y puntuados.",
     "firstScorer": "Primer goleador",
