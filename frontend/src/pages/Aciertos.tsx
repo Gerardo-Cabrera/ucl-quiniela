@@ -1,7 +1,8 @@
 import { Target, Goal } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useStats } from "@/hooks";
-import { Card, Spinner, EmptyState, RankingCard } from "@/components/ui";
+import { Card, Spinner, EmptyState, RankingCard, DayHeader } from "@/components/ui";
+import { groupByDay } from "@/lib/date";
 import { ShareButton } from "@/components/ShareButton";
 import { bold, bulletWithDetail, shareText } from "@/lib/share";
 import type { UserCount } from "@/types";
@@ -10,31 +11,40 @@ interface HitRow {
   match_id: number;
   home_team: string;
   away_team: string;
+  match_date: string;
   value: string;        // goleador o marcador real
   hitters: string[];    // quiénes acertaron (siempre ≥1)
 }
 
-/** Lista de partidos con acierto (primer gol o marcador exacto). Fuente única
- *  para no duplicar el render de ambas secciones. */
+/** Lista de partidos con acierto (marcador exacto o primer gol), agrupados por
+ *  fecha con subtítulo, de la más reciente a la más antigua. Fuente única para no
+ *  duplicar el render de ambas secciones. */
 function HitList({ title, rows }: { title: string; rows: HitRow[] }) {
   const { t } = useTranslation();
   if (rows.length === 0) return null;
   return (
     <Card>
       <h2 className="font-display text-xl mb-4">{title}</h2>
-      {/* Los acertantes nunca se recortan: en móvil van en su propia línea bajo el
-          partido; en pantallas anchas comparten fila y saltan de línea si hace falta. */}
-      <div className="space-y-2">
-        {rows.map((r) => (
-          <div key={r.match_id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 rounded-lg hover:bg-ucl-blue/20 text-sm">
-            <span className="flex-1 min-w-0 text-ucl-white truncate">
-              {r.home_team} <span className="text-ucl-silver/40">{t("common.vs")}</span> {r.away_team}
-            </span>
-            <span className="text-ucl-gold font-medium font-mono shrink-0">{r.value}</span>
-            <span className="w-full sm:w-auto sm:flex-1 sm:basis-0 text-xs text-ucl-silver/60 sm:text-right break-words">
-              {r.hitters.join(", ")}
-            </span>
-          </div>
+      <div className="space-y-5">
+        {groupByDay(rows, (r) => r.match_date, "desc").map((group) => (
+          <section key={group.day}>
+            <DayHeader date={group.date} className="text-base" />
+            {/* Los acertantes nunca se recortan: en móvil van en su propia línea bajo el
+                partido; en pantallas anchas comparten fila y saltan de línea si hace falta. */}
+            <div className="space-y-2">
+              {group.items.map((r) => (
+                <div key={r.match_id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 rounded-lg hover:bg-ucl-blue/20 text-sm">
+                  <span className="flex-1 min-w-0 text-ucl-white truncate">
+                    {r.home_team} <span className="text-ucl-silver/40">{t("common.vs")}</span> {r.away_team}
+                  </span>
+                  <span className="text-ucl-gold font-medium font-mono shrink-0">{r.value}</span>
+                  <span className="w-full sm:w-auto sm:flex-1 sm:basis-0 text-xs text-ucl-silver/60 sm:text-right break-words">
+                    {r.hitters.join(", ")}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </section>
         ))}
       </div>
     </Card>
@@ -79,10 +89,10 @@ export default function Aciertos() {
 
   // Texto para compartir, por tipo de acierto (solo si hay datos): el ranking en un
   // bloque y, en otro, cada partido acertado (marcador o goleador real) con quiénes
-  // acertaron en su propia línea.
+  // acertaron en su propia línea y una línea en blanco entre partidos.
   const section = (title: string, ranking: UserCount[], detailTitle: string, detail: string[]) =>
     ranking.length
-      ? [[bold(title), ...ranking.map((u, i) => `${i + 1}. ${u.team_name} — ${u.count}`)], [detailTitle, ...detail]]
+      ? [[bold(title), ...ranking.map((u, i) => `${i + 1}. ${u.team_name} — ${u.count}`)], [detailTitle, detail.join("\n\n")]]
       : [];
   const text = shareText(
     `${t("brand.appTitle")} · ${t("aciertos.title")}`,
@@ -102,16 +112,16 @@ export default function Aciertos() {
 
       <div className="grid gap-6 md:grid-cols-2">
         <RankingCard
-          title={t("aciertos.firstScorer")}
-          icon={<Goal size={18} className="text-ucl-gold" />}
-          rows={data!.first_goal_ranking.map((u) => ({ name: u.team_name, value: u.count }))}
-          emptyText={t("aciertos.firstScorerEmpty")}
-        />
-        <RankingCard
           title={t("aciertos.exactScore")}
           icon={<Target size={18} className="text-ucl-gold" />}
           rows={data!.exact_ranking.map((u) => ({ name: u.team_name, value: u.count }))}
           emptyText={t("aciertos.exactScoreEmpty")}
+        />
+        <RankingCard
+          title={t("aciertos.firstScorer")}
+          icon={<Goal size={18} className="text-ucl-gold" />}
+          rows={data!.first_goal_ranking.map((u) => ({ name: u.team_name, value: u.count }))}
+          emptyText={t("aciertos.firstScorerEmpty")}
         />
       </div>
 
@@ -129,19 +139,13 @@ export default function Aciertos() {
       )}
 
       <HitList
-        title={t("aciertos.firstGoalByMatch")}
-        rows={data!.first_goal_matches.map((m) => ({
-          match_id: m.match_id, home_team: m.home_team, away_team: m.away_team,
-          value: m.scorer ?? t("common.dash"), hitters: m.hitters,
-        }))}
+        title={t("aciertos.exactByMatch")}
+        rows={data!.exact_matches.map((m) => ({ ...m, value: m.score }))}
       />
 
       <HitList
-        title={t("aciertos.exactByMatch")}
-        rows={data!.exact_matches.map((m) => ({
-          match_id: m.match_id, home_team: m.home_team, away_team: m.away_team,
-          value: m.score, hitters: m.hitters,
-        }))}
+        title={t("aciertos.firstGoalByMatch")}
+        rows={data!.first_goal_matches.map((m) => ({ ...m, value: m.scorer ?? t("common.dash") }))}
       />
     </div>
   );
