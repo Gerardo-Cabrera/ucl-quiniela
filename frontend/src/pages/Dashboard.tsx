@@ -5,6 +5,7 @@ import { useLeaderboard } from "@/hooks";
 import { Card, Spinner, EmptyState } from "@/components/ui";
 import { UserPredictionsModal } from "@/components/UserPredictionsModal";
 import { ShareButton } from "@/components/ShareButton";
+import { shareText } from "@/lib/share";
 import { useAuthStore } from "@/store/authStore";
 import { clsx } from "clsx";
 
@@ -40,10 +41,10 @@ export default function Dashboard() {
   const anyTournamentCalculated = leaderboard.some((e) => e.tournament_calculated);
 
   // La tabla como texto para compartir (reutiliza los datos ya mostrados).
-  const shareText = [
-    t("dashboard.shareTitle"), "",
-    ...leaderboard.map((e) => `${e.rank}. ${e.team_name} — ${e.total_points} ${t("common.pts")}`),
-  ].join("\n");
+  const text = shareText(
+    t("dashboard.shareTitle"),
+    leaderboard.map((e) => `${e.rank}. ${e.team_name} — ${e.total_points} ${t("common.pts")}`),
+  );
 
   return (
     <div className="space-y-6 animate-in">
@@ -80,7 +81,7 @@ export default function Dashboard() {
             <Trophy size={18} className="text-ucl-gold" />
             <h2 className="font-display text-2xl">{t("dashboard.classification")}</h2>
           </div>
-          <ShareButton text={shareText} ariaLabel={t("dashboard.shareAria")} />
+          <ShareButton text={text} ariaLabel={t("dashboard.shareAria")} />
         </div>
 
         <div className="space-y-2">

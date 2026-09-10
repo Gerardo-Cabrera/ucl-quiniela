@@ -112,13 +112,14 @@ async def test_matchdays_mvp(auth_client: AsyncClient):
     # Ambos participantes aparecen, ordenados por puntos desc.
     assert [e["team_name"] for e in day["entries"]] == ["Jax FC", "Megalink FC"]
     assert day["complete"] is True   # único partido del día: terminado y puntuado
-
-    assert data["mvp_ranking"] == [{"team_name": "Jax FC", "count": 1}]
     # Jornada completa (ronda 1 de la fase de liga): con un solo día coincide con él.
     assert len(data["rounds"]) == 1
     rnd = data["rounds"][0]
     assert (rnd["phase"], rnd["round_number"], rnd["start"], rnd["end"]) == ("league", 1, day["date"], day["date"])
     assert rnd["mvps"] == ["Jax FC"] and rnd["mvp_points"] == 16 and rnd["complete"] is True
+    # Rankings de veces como MVP (día y jornada completa), calculados en el backend.
+    assert data["day_mvp_ranking"] == [{"team_name": "Jax FC", "count": 1}]
+    assert data["round_mvp_ranking"] == [{"team_name": "Jax FC", "count": 1}]
 
 
 async def _add_round_match(*, ago: timedelta, round_number: int | None = None, phase=MatchPhase.LEAGUE,
@@ -174,11 +175,15 @@ async def test_matchdays_incomplete_until_all_played_and_scored(auth_client: Asy
     data = (await auth_client.get("/api/matchdays/")).json()
     assert data["days"][0]["complete"] is True
     assert data["rounds"][0]["complete"] is False
+    # Solo los grupos completos cuentan como MVP: el día sí, la jornada aún no.
+    assert data["day_mvp_ranking"] == [{"team_name": "Jax FC", "count": 1}]
+    assert data["round_mvp_ranking"] == []
 
     # Un partido terminado el mismo día pero con una predicción sin puntuar: el día tampoco.
     await _add_round_match(ago=timedelta(hours=3), round_number=1, points={1: 0}, calculated=False)
     data = (await auth_client.get("/api/matchdays/")).json()
     assert data["days"][0]["complete"] is False
+    assert data["day_mvp_ranking"] == []
 
 
 @pytest.mark.asyncio
@@ -204,9 +209,11 @@ async def test_matchdays_knockout_round_spans_both_legs(auth_client: AsyncClient
         session.add(Prediction(user_id=1, match_id=back.id, predicted_home=1, predicted_away=0,
                                points_earned=8, is_calculated=True))
         await session.commit()
-    rnd = (await auth_client.get("/api/matchdays/")).json()["rounds"][0]
+    data = (await auth_client.get("/api/matchdays/")).json()
+    rnd = data["rounds"][0]
     assert rnd["complete"] is True
     assert [(e["team_name"], e["points"]) for e in rnd["entries"]] == [("Jax FC", 13)]
+    assert data["round_mvp_ranking"] == [{"team_name": "Jax FC", "count": 1}]
 
 
 @pytest.mark.asyncio
@@ -231,7 +238,7 @@ async def test_inactive_user_hidden_from_stats_and_matchdays(auth_client: AsyncC
 @pytest.mark.asyncio
 async def test_matchdays_empty(auth_client: AsyncClient):
     data = (await auth_client.get("/api/matchdays/")).json()
-    assert data == {"days": [], "rounds": [], "mvp_ranking": []}
+    assert data == {"days": [], "rounds": [], "day_mvp_ranking": [], "round_mvp_ranking": []}
 
 
 @pytest.mark.asyncio

@@ -1,28 +1,24 @@
 import { useState } from "react";
 import { Crown } from "lucide-react";
-import { format } from "date-fns";
-import { es } from "date-fns/locale";
 import { useTranslation } from "react-i18next";
 import { useMatchdays } from "@/hooks";
 import { Card, Spinner, EmptyState, PointsChip, Pills } from "@/components/ui";
 import { ShareButton } from "@/components/ShareButton";
-import { isoDayToDate } from "@/lib/date";
-import type { PointsGroup, RoundEntry } from "@/types";
+import { bold, shareText } from "@/lib/share";
+import { useMatchdayLabels, type MatchdayView } from "@/lib/matchdays";
+import type { PointsGroup } from "@/types";
 import { clsx } from "clsx";
-
-type View = "days" | "rounds";
 
 /** Tarjeta de un grupo de puntos (un día o una jornada completa): título, MVP(s),
  *  compartir (solo cuando todos sus partidos se jugaron y puntuaron) y la tabla. */
 function GroupCard({ title, subtitle, group }: { title: string; subtitle?: string; group: PointsGroup }) {
   const { t } = useTranslation();
   const pts = (n: number) => `${n} ${t("common.pts")}`;
-  const shareText = [
+  const text = shareText(
     `${t("brand.appTitle")} · ${title}${subtitle ? ` (${subtitle})` : ""}`,
-    group.mvps.length ? `${t("jornada.mvpLabel")}: ${group.mvps.join(" · ")} — ${pts(group.mvp_points)}` : "",
-    "",
-    ...group.entries.map((e, i) => `${i + 1}. ${e.team_name} — ${pts(e.points)}`),
-  ].join("\n");
+    group.mvps.length ? [`${bold(t("jornada.mvpLabel") + ":")} ${group.mvps.join(" · ")} — ${pts(group.mvp_points)}`] : [],
+    group.entries.map((e, i) => `${i + 1}. ${e.team_name} — ${pts(e.points)}`),
+  );
 
   return (
     <Card>
@@ -38,7 +34,7 @@ function GroupCard({ title, subtitle, group }: { title: string; subtitle?: strin
             </span>
           )}
           <ShareButton
-            text={shareText}
+            text={text}
             ariaLabel={t("jornada.shareAria")}
             disabled={!group.complete}
             disabledTitle={t("jornada.shareLocked")}
@@ -76,7 +72,8 @@ function GroupCard({ title, subtitle, group }: { title: string; subtitle?: strin
 export default function Jornada() {
   const { t } = useTranslation();
   const { data, isLoading } = useMatchdays();
-  const [view, setView] = useState<View>("days");
+  const [view, setView] = useState<MatchdayView>("days");
+  const { viewOptions, dayTitle, roundTitle, roundDates } = useMatchdayLabels();
 
   if (isLoading) {
     return (
@@ -106,27 +103,12 @@ export default function Jornada() {
   // El backend los envía ascendentes; se muestran del más reciente al más antiguo.
   const days = [...data.days].reverse();
   const rounds = [...data.rounds].reverse();
-  const dayTitle = (day: string) => format(isoDayToDate(day), "EEEE d 'de' MMMM", { locale: es });
-  // "Jornada N" en fase de liga; en eliminatorias, la fase. Subtítulo: sus días.
-  const roundTitle = (r: RoundEntry) =>
-    r.round_number != null ? t("jornada.round", { n: r.round_number }) : t(`phase.${r.phase}`);
-  const roundDates = (r: RoundEntry) => {
-    const fmt = (d: string) => format(isoDayToDate(d), "d MMM", { locale: es });
-    return r.start === r.end ? fmt(r.start) : `${fmt(r.start)} – ${fmt(r.end)}`;
-  };
 
   return (
     <div className="space-y-6 animate-in">
       {header}
 
-      <Pills
-        options={[
-          { value: "days", label: t("jornada.byDay") },
-          { value: "rounds", label: t("jornada.byRound") },
-        ]}
-        value={view}
-        onChange={setView}
-      />
+      <Pills options={viewOptions} value={view} onChange={setView} />
 
       {view === "days"
         ? days.map((d) => <GroupCard key={d.date} title={dayTitle(d.date)} group={d} />)

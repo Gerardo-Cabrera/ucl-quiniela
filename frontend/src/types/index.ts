@@ -192,12 +192,13 @@ export interface RoundEntry extends PointsGroup {
 
 export interface MvpRankEntry {
   team_name: string;
-  count: number;
+  count: number;   // veces como MVP (solo grupos completos)
 }
 
 export interface MatchdaysSummary {
   days: MatchdayEntry[];
   rounds: RoundEntry[];
-  mvp_ranking: MvpRankEntry[];
+  day_mvp_ranking: MvpRankEntry[];     // calculados en el backend
+  round_mvp_ranking: MvpRankEntry[];
 }
 
