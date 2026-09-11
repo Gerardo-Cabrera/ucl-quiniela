@@ -29,15 +29,15 @@ function HitList({ title, rows }: { title: string; rows: HitRow[] }) {
         {groupByDay(rows, (r) => r.match_date, "desc").map((group) => (
           <section key={group.day}>
             <DayHeader date={group.date} className="text-base" />
-            {/* Los acertantes nunca se recortan: en móvil van en su propia línea bajo el
-                partido; en pantallas anchas comparten fila y saltan de línea si hace falta. */}
+            {/* Nada se recorta: en pantallas estrechas el partido, el goleador (o marcador)
+                y los acertantes van en líneas sucesivas; en las anchas comparten fila. */}
             <div className="space-y-2">
               {group.items.map((r) => (
                 <div key={r.match_id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 rounded-lg hover:bg-ucl-blue/20 text-sm">
-                  <span className="flex-1 min-w-0 text-ucl-white truncate">
+                  <span className="w-full sm:w-auto sm:flex-1 min-w-0 text-ucl-white">
                     {r.home_team} <span className="text-ucl-silver/40">{t("common.vs")}</span> {r.away_team}
                   </span>
-                  <span className="text-ucl-gold font-medium font-mono shrink-0">{r.value}</span>
+                  <span className="text-ucl-gold font-medium font-mono">{r.value}</span>
                   <span className="w-full sm:w-auto sm:flex-1 sm:basis-0 text-xs text-ucl-silver/60 sm:text-right break-words">
                     {r.hitters.join(", ")}
                   </span>
