@@ -140,7 +140,8 @@ export interface FirstGoalMatch {
   hitters: string[];       // solo partidos con acierto (≥1)
 }
 
-export interface ExactMatch {
+/** Partido con acierto de marcador exacto, victoria o empate. */
+export interface ScoreMatch {
   match_id: number;
   home_team: string;
   away_team: string;
@@ -158,8 +159,12 @@ export interface StatsSummary {
   first_goal_matches: FirstGoalMatch[];
   first_goal_ranking: UserCount[];
   top_scores: ScoreCount[];
-  exact_matches: ExactMatch[];
+  exact_matches: ScoreMatch[];
   exact_ranking: UserCount[];
+  win_matches: ScoreMatch[];      // ganador acertado (un exacto cuenta también)
+  win_ranking: UserCount[];
+  draw_matches: ScoreMatch[];     // empate acertado
+  draw_ranking: UserCount[];
 }
 
 // ── MATCHDAYS (MVPs) ────────────────────────────────────────────────────────────

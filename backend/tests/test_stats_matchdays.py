@@ -68,6 +68,39 @@ async def test_stats_rankings(auth_client: AsyncClient):
     assert ex["score"] == "2-1"
     assert ex["hitters"] == ["Jax FC"]
 
+    # El marcador exacto (2-1) cuenta también como victoria acertada; nadie acertó empate.
+    assert data["win_ranking"] == [{"team_name": "Jax FC", "count": 1}]
+    assert [m["hitters"] for m in data["win_matches"]] == [["Jax FC"]]
+    assert data["draw_ranking"] == [] and data["draw_matches"] == []
+
+
+@pytest.mark.asyncio
+async def test_stats_win_and_draw_hits(auth_client: AsyncClient):
+    """Victoria: ganador acertado aunque falle el marcador; empate: ambos empate.
+    Real 1-1: Jax pronosticó 2-2 (empate acertado, no exacto), Megalink 1-0 (falla)."""
+    await _seed_scored_match()   # 2-1: Jax exacto (+victoria), Megalink falla
+    async with TestSessionLocal() as session:
+        rival = (await session.execute(select(User).where(User.team_name == "Megalink FC"))).scalar_one()
+        match = Match(
+            api_fixture_id=7003, home_team="Bayern Munich", away_team="Manchester City",
+            home_score=1, away_score=1, first_goal_team="Bayern Munich",
+            phase=MatchPhase.LEAGUE, status=MatchStatus.FINISHED,
+            match_date=datetime.now(timezone.utc) - timedelta(days=1),
+        )
+        session.add(match)
+        await session.flush()
+        session.add_all([
+            Prediction(user_id=1, match_id=match.id, predicted_home=2, predicted_away=2, points_earned=6, is_calculated=True),
+            Prediction(user_id=rival.id, match_id=match.id, predicted_home=1, predicted_away=0, points_earned=0, is_calculated=True),
+        ])
+        await session.commit()
+
+    data = (await auth_client.get("/api/stats/")).json()
+    assert data["draw_ranking"] == [{"team_name": "Jax FC", "count": 1}]
+    assert [(m["score"], m["hitters"]) for m in data["draw_matches"]] == [("1-1", ["Jax FC"])]
+    assert data["win_ranking"] == [{"team_name": "Jax FC", "count": 1}]      # solo el 2-1
+    assert data["exact_ranking"] == [{"team_name": "Jax FC", "count": 1}]    # el 2-2 no es exacto
+
 
 @pytest.mark.asyncio
 async def test_stats_only_hits_shown(auth_client: AsyncClient):
@@ -92,11 +125,11 @@ async def test_stats_empty(auth_client: AsyncClient):
     """Sin partidos puntuados, todo vacío."""
     data = (await auth_client.get("/api/stats/")).json()
     assert data == {
-        "first_goal_matches": [],
-        "first_goal_ranking": [],
+        "first_goal_matches": [], "first_goal_ranking": [],
         "top_scores": [],
-        "exact_matches": [],
-        "exact_ranking": [],
+        "exact_matches": [], "exact_ranking": [],
+        "win_matches": [], "win_ranking": [],
+        "draw_matches": [], "draw_ranking": [],
     }
 
 

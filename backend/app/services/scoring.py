@@ -37,7 +37,9 @@ KNOCKOUT_PHASES = {
 
 # ── HELPERS ───────────────────────────────────────────────────────────────────
 
-def _get_outcome(home: int, away: int) -> str:
+def outcome(home: int, away: int) -> str:
+    """Resultado de un marcador: "home", "away" o "draw". Lo usan el scoring y las
+    estadísticas de Aciertos (victorias y empates acertados)."""
     if home > away:
         return "home"
     if away > home:
@@ -76,8 +78,8 @@ def calculate_match_points(
     p = _get_points_table(phase)
     breakdown = {"exact": 0, "outcome": 0, "first_goal": 0, "total": 0}
 
-    pred_outcome   = _get_outcome(predicted_home, predicted_away)
-    actual_outcome = _get_outcome(actual_home, actual_away)
+    pred_outcome   = outcome(predicted_home, predicted_away)
+    actual_outcome = outcome(actual_home, actual_away)
     if pred_outcome == actual_outcome:
         breakdown["outcome"] = p["draw"] if actual_outcome == "draw" else p["win"]
         if predicted_home == actual_home and predicted_away == actual_away:
