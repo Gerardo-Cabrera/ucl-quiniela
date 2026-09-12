@@ -4,7 +4,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.match import Match, MatchStatus
 from app.models.prediction import Prediction
 from app.models.user import User
-from app.schemas.stats import ExactMatch, FirstGoalMatch, ScoreCount, StatsSummary, UserCount
+from app.services.scoring import outcome
+from app.schemas.stats import FirstGoalMatch, ScoreCount, ScoreMatch, StatsSummary, UserCount
+
+# Tipos de acierto: marcador exacto, primer gol (por jugador), victoria (ganador
+# correcto) y empate. Un marcador exacto cuenta también como victoria o empate.
+_KINDS = ("exact", "first_goal", "win", "draw")
 
 
 def _ranking(counts: dict[str, int]) -> list[UserCount]:
@@ -17,8 +22,8 @@ def _ranking(counts: dict[str, int]) -> list[UserCount]:
 
 class StatsCRUD:
     async def get_summary(self, db: AsyncSession) -> StatsSummary:
-        """Aciertos de primer gol (por partido + ranking) y de marcador exacto (marcador
-        real más repetido + ranking). Solo cuenta predicciones ya calculadas de partidos
+        """Aciertos por tipo (ranking + partidos con acierto) y marcador real más
+        repetido. Solo cuenta predicciones ya calculadas de cuentas activas en partidos
         finalizados. Dos consultas acotadas + agregación en Python (cross-DB); no hay N+1."""
         matches = (await db.execute(
             select(
@@ -41,21 +46,25 @@ class StatsCRUD:
         )).all()
 
         by_id = {m.id: m for m in matches}
-        exact_counts: dict[str, int] = defaultdict(int)
-        exact_hitters: dict[int, list[str]] = defaultdict(list)  # match_id -> equipos
-        fg_counts: dict[str, int] = defaultdict(int)
-        fg_hitters: dict[int, list[str]] = defaultdict(list)  # match_id -> equipos
+        counts: dict[str, dict[str, int]] = {k: defaultdict(int) for k in _KINDS}       # tipo -> equipo -> aciertos
+        hitters: dict[str, dict[int, list[str]]] = {k: defaultdict(list) for k in _KINDS}  # tipo -> partido -> equipos
+
+        def hit(kind: str, team: str, match_id: int) -> None:
+            counts[kind][team] += 1
+            hitters[kind][match_id].append(team)
+
         for team, match_id, ph, pa, pfg in preds:
             m = by_id.get(match_id)
             if m is None or m.home_score is None or m.away_score is None:
                 continue
             if ph == m.home_score and pa == m.away_score:
-                exact_counts[team] += 1
-                exact_hitters[match_id].append(team)
+                hit("exact", team, match_id)
+            real = outcome(m.home_score, m.away_score)
+            if outcome(ph, pa) == real:
+                hit("draw" if real == "draw" else "win", team, match_id)
             # Primer gol por jugador (id), igual que el scoring: ambos deben existir.
             if pfg is not None and m.first_goal_player_id is not None and pfg == m.first_goal_player_id:
-                fg_counts[team] += 1
-                fg_hitters[match_id].append(team)
+                hit("first_goal", team, match_id)
 
         # Marcador real más repetido (sobre los partidos finalizados; empates → varios).
         score_freq: dict[str, int] = defaultdict(int)
@@ -68,30 +77,36 @@ class StatsCRUD:
             key=lambda x: x.score,
         )
 
-        # Solo partidos CON acierto (fg_hitters/exact_hitters no vacíos).
+        def score_matches(kind: str) -> list[ScoreMatch]:
+            """Solo partidos CON acierto de ese tipo, con el marcador real."""
+            return [
+                ScoreMatch(
+                    match_id=m.id, home_team=m.home_team, away_team=m.away_team,
+                    match_date=m.match_date, score=f"{m.home_score}-{m.away_score}",
+                    hitters=sorted(hitters[kind][m.id]),
+                )
+                for m in matches if hitters[kind].get(m.id)
+            ]
+
         first_goal_matches = [
             FirstGoalMatch(
                 match_id=m.id, home_team=m.home_team, away_team=m.away_team,
                 match_date=m.match_date, scorer=m.first_goal_player,
-                hitters=sorted(fg_hitters[m.id]),
+                hitters=sorted(hitters["first_goal"][m.id]),
             )
-            for m in matches if fg_hitters.get(m.id)
-        ]
-        exact_matches = [
-            ExactMatch(
-                match_id=m.id, home_team=m.home_team, away_team=m.away_team,
-                match_date=m.match_date, score=f"{m.home_score}-{m.away_score}",
-                hitters=sorted(exact_hitters[m.id]),
-            )
-            for m in matches if exact_hitters.get(m.id)
+            for m in matches if hitters["first_goal"].get(m.id)
         ]
 
         return StatsSummary(
             first_goal_matches=first_goal_matches,
-            first_goal_ranking=_ranking(fg_counts),
+            first_goal_ranking=_ranking(counts["first_goal"]),
             top_scores=top_scores,
-            exact_matches=exact_matches,
-            exact_ranking=_ranking(exact_counts),
+            exact_matches=score_matches("exact"),
+            exact_ranking=_ranking(counts["exact"]),
+            win_matches=score_matches("win"),
+            win_ranking=_ranking(counts["win"]),
+            draw_matches=score_matches("draw"),
+            draw_ranking=_ranking(counts["draw"]),
         )
 
 

@@ -16,13 +16,15 @@ class FirstGoalMatch(BaseModel):
     hitters: list[str]          # equipos que lo acertaron (solo se listan si ≥1)
 
 
-class ExactMatch(BaseModel):
+class ScoreMatch(BaseModel):
+    """Partido con acierto de marcador exacto, victoria o empate: marcador real y
+    quiénes acertaron (solo se listan partidos con ≥1 acierto)."""
     match_id: int
     home_team: str
     away_team: str
     match_date: datetime
     score: str                  # marcador real, "2-1"
-    hitters: list[str]          # equipos que acertaron el marcador exacto (solo si ≥1)
+    hitters: list[str]
 
 
 class ScoreCount(BaseModel):
@@ -31,8 +33,14 @@ class ScoreCount(BaseModel):
 
 
 class StatsSummary(BaseModel):
-    first_goal_matches: list[FirstGoalMatch]  # SOLO partidos con acierto, más reciente primero
-    first_goal_ranking: list[UserCount]        # aciertos de primer gol por usuario (desc)
+    """Por tipo de acierto: ranking por usuario (desc) y partidos CON acierto (más
+    reciente primero). Un marcador exacto cuenta también como victoria o empate."""
+    first_goal_matches: list[FirstGoalMatch]
+    first_goal_ranking: list[UserCount]
     top_scores: list[ScoreCount]               # marcador(es) real(es) más repetido(s)
-    exact_matches: list[ExactMatch]            # SOLO partidos con acierto de marcador exacto
-    exact_ranking: list[UserCount]             # aciertos de marcador exacto por usuario (desc)
+    exact_matches: list[ScoreMatch]
+    exact_ranking: list[UserCount]
+    win_matches: list[ScoreMatch]              # ganador acertado
+    win_ranking: list[UserCount]
+    draw_matches: list[ScoreMatch]             # empate acertado
+    draw_ranking: list[UserCount]

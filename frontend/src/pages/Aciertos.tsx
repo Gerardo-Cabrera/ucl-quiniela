@@ -1,11 +1,10 @@
-import { Target, Goal } from "lucide-react";
+import { Target, Goal, Trophy, Equal } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useStats } from "@/hooks";
 import { Card, Spinner, EmptyState, RankingCard, DayHeader } from "@/components/ui";
-import { groupByDay } from "@/lib/date";
 import { ShareButton } from "@/components/ShareButton";
 import { bold, bulletWithDetail, shareText } from "@/lib/share";
-import type { UserCount } from "@/types";
+import { groupByDay } from "@/lib/date";
 
 interface HitRow {
   match_id: number;
@@ -16,9 +15,8 @@ interface HitRow {
   hitters: string[];    // quiénes acertaron (siempre ≥1)
 }
 
-/** Lista de partidos con acierto (marcador exacto o primer gol), agrupados por
- *  fecha con subtítulo, de la más reciente a la más antigua. Fuente única para no
- *  duplicar el render de ambas secciones. */
+/** Lista de partidos con acierto, agrupados por fecha con subtítulo, de la más
+ *  reciente a la más antigua. Fuente única para todos los tipos de acierto. */
 function HitList({ title, rows }: { title: string; rows: HitRow[] }) {
   const { t } = useTranslation();
   if (rows.length === 0) return null;
@@ -63,12 +61,37 @@ export default function Aciertos() {
     );
   }
 
-  const hasData =
-    data &&
-    (data.first_goal_ranking.length ||
-      data.exact_ranking.length ||
-      data.first_goal_matches.length ||
-      data.exact_matches.length);
+  // Tipos de acierto, en el orden de la vista. De esta lista salen los rankings, el
+  // detalle por partido y el texto compartido (sin repetir markup por tipo).
+  const withScore = (r: HitRow) => `${r.home_team} ${r.value} ${r.away_team}`;
+  const kinds = data ? [
+    {
+      key: "exact", title: t("aciertos.exactScore"), icon: <Target size={18} className="text-ucl-gold" />,
+      ranking: data.exact_ranking, rows: data.exact_matches.map((m) => ({ ...m, value: m.score })),
+      byMatch: t("aciertos.exactByMatch"), empty: t("aciertos.exactScoreEmpty"),
+      shareDetail: t("aciertos.shareExactDetail"), label: withScore,
+    },
+    {
+      key: "first_goal", title: t("aciertos.firstScorer"), icon: <Goal size={18} className="text-ucl-gold" />,
+      ranking: data.first_goal_ranking, rows: data.first_goal_matches.map((m) => ({ ...m, value: m.scorer ?? t("common.dash") })),
+      byMatch: t("aciertos.firstGoalByMatch"), empty: t("aciertos.firstScorerEmpty"),
+      shareDetail: t("aciertos.shareFirstGoalDetail"),
+      label: (r: HitRow) => `${r.home_team} ${t("common.vs")} ${r.away_team} — ${r.value}`,
+    },
+    {
+      key: "win", title: t("aciertos.wins"), icon: <Trophy size={18} className="text-ucl-gold" />,
+      ranking: data.win_ranking, rows: data.win_matches.map((m) => ({ ...m, value: m.score })),
+      byMatch: t("aciertos.winsByMatch"), empty: t("aciertos.winsEmpty"),
+      shareDetail: t("aciertos.shareWinsDetail"), label: withScore,
+    },
+    {
+      key: "draw", title: t("aciertos.draws"), icon: <Equal size={18} className="text-ucl-gold" />,
+      ranking: data.draw_ranking, rows: data.draw_matches.map((m) => ({ ...m, value: m.score })),
+      byMatch: t("aciertos.drawsByMatch"), empty: t("aciertos.drawsEmpty"),
+      shareDetail: t("aciertos.shareDrawsDetail"), label: withScore,
+    },
+  ] : [];
+  const hasData = kinds.some((k) => k.ranking.length > 0);
 
   // Encabezado
   const header = (
@@ -88,19 +111,14 @@ export default function Aciertos() {
   }
 
   // Texto para compartir, por tipo de acierto (solo si hay datos): el ranking en un
-  // bloque y, en otro, cada partido acertado (marcador o goleador real) con quiénes
-  // acertaron en su propia línea y una línea en blanco entre partidos.
-  const section = (title: string, ranking: UserCount[], detailTitle: string, detail: string[]) =>
-    ranking.length
-      ? [[bold(title), ...ranking.map((u, i) => `${i + 1}. ${u.team_name} — ${u.count}`)], [detailTitle, detail.join("\n\n")]]
-      : [];
+  // bloque y, en otro, cada partido acertado con quiénes acertaron en su propia línea
+  // y una línea en blanco entre partidos.
   const text = shareText(
     `${t("brand.appTitle")} · ${t("aciertos.title")}`,
-    ...section(t("aciertos.exactScore"), data!.exact_ranking, t("aciertos.shareExactDetail"),
-      data!.exact_matches.map((m) => bulletWithDetail(`${m.home_team} ${m.score} ${m.away_team}`, m.hitters.join(", ")))),
-    ...section(t("aciertos.firstScorer"), data!.first_goal_ranking, t("aciertos.shareFirstGoalDetail"),
-      data!.first_goal_matches.map((m) =>
-        bulletWithDetail(`${m.home_team} ${t("common.vs")} ${m.away_team} — ${m.scorer ?? t("common.dash")}`, m.hitters.join(", ")))),
+    ...kinds.flatMap((k) => k.ranking.length ? [
+      [bold(k.title), ...k.ranking.map((u, i) => `${i + 1}. ${u.team_name} — ${u.count}`)],
+      [k.shareDetail, k.rows.map((r) => bulletWithDetail(k.label(r), r.hitters.join(", "))).join("\n\n")],
+    ] : []),
   );
 
   return (
@@ -111,18 +129,15 @@ export default function Aciertos() {
       </div>
 
       <div className="grid gap-6 md:grid-cols-2">
-        <RankingCard
-          title={t("aciertos.exactScore")}
-          icon={<Target size={18} className="text-ucl-gold" />}
-          rows={data!.exact_ranking.map((u) => ({ name: u.team_name, value: u.count }))}
-          emptyText={t("aciertos.exactScoreEmpty")}
-        />
-        <RankingCard
-          title={t("aciertos.firstScorer")}
-          icon={<Goal size={18} className="text-ucl-gold" />}
-          rows={data!.first_goal_ranking.map((u) => ({ name: u.team_name, value: u.count }))}
-          emptyText={t("aciertos.firstScorerEmpty")}
-        />
+        {kinds.map((k) => (
+          <RankingCard
+            key={k.key}
+            title={k.title}
+            icon={k.icon}
+            rows={k.ranking.map((u) => ({ name: u.team_name, value: u.count }))}
+            emptyText={k.empty}
+          />
+        ))}
       </div>
 
       {data!.top_scores.length > 0 && (
@@ -138,15 +153,7 @@ export default function Aciertos() {
         </Card>
       )}
 
-      <HitList
-        title={t("aciertos.exactByMatch")}
-        rows={data!.exact_matches.map((m) => ({ ...m, value: m.score }))}
-      />
-
-      <HitList
-        title={t("aciertos.firstGoalByMatch")}
-        rows={data!.first_goal_matches.map((m) => ({ ...m, value: m.scorer ?? t("common.dash") }))}
-      />
+      {kinds.map((k) => <HitList key={k.key} title={k.byMatch} rows={k.rows} />)}
     </div>
   );
 }

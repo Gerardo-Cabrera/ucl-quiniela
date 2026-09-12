@@ -10,7 +10,7 @@ from app.services.scoring import (
     LEAGUE_POINTS,
     KNOCKOUT_POINTS,
     TOP8_POINTS,
-    _get_outcome,
+    outcome,
 )
 
 
@@ -19,16 +19,16 @@ from app.services.scoring import (
 
 class TestGetOutcome:
     def test_home_win(self):
-        assert _get_outcome(3, 1) == "home"
+        assert outcome(3, 1) == "home"
 
     def test_away_win(self):
-        assert _get_outcome(0, 2) == "away"
+        assert outcome(0, 2) == "away"
 
     def test_draw(self):
-        assert _get_outcome(1, 1) == "draw"
+        assert outcome(1, 1) == "draw"
 
     def test_draw_zero(self):
-        assert _get_outcome(0, 0) == "draw"
+        assert outcome(0, 0) == "draw"
 
 
 # ── LEAGUE PHASE SCORING ────────────────────────────────────────────────────
