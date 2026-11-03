@@ -2,6 +2,7 @@ import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { Pencil } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import type { Match, Prediction } from "@/types";
 import { Badge, StatusDot, PointsChip, TeamLogo } from "@/components/ui";
 import { FirstGoalLine } from "@/components/FirstGoalLine";
@@ -13,6 +14,27 @@ interface MatchCardProps {
   onPredict?: (match: Match) => void;
 }
 
+// Pausas que la API marca con su propio status.short: en ellas el minuto se queda fijo
+// (45 en el descanso, 105 en el de la prórroga, 120 en los penales), así que se muestra
+// la etiqueta en vez del minuto; al reanudarse (2H, ET) vuelve el minuto.
+const LIVE_PAUSE_KEYS: Record<string, string> = {
+  HT:   "status.halfTime",
+  BT:   "status.extraTimeBreak",
+  P:    "status.penaltyShootout",
+  SUSP: "status.suspended",
+  INT:  "status.interrupted",
+};
+
+/** Reloj de un partido en vivo: la etiqueta de la pausa si la hay, si no el minuto
+ *  ("67′", "90+3′"); null si no hay nada que mostrar (se enseña la fecha). */
+function liveClock(match: Match, t: TFunction): string | null {
+  if (match.status !== "live") return null;
+  const pauseKey = match.api_status ? LIVE_PAUSE_KEYS[match.api_status] : undefined;
+  if (pauseKey) return t(pauseKey);
+  if (match.elapsed == null) return null;
+  return `${match.elapsed}${match.elapsed_extra ? `+${match.elapsed_extra}` : ""}′`;
+}
+
 export function MatchCard({ match, prediction, onPredict }: MatchCardProps) {
   const { t } = useTranslation();
   const isFinished  = match.status === "finished";
@@ -20,6 +42,7 @@ export function MatchCard({ match, prediction, onPredict }: MatchCardProps) {
   const hasExact    = prediction &&
     prediction.predicted_home === match.home_score &&
     prediction.predicted_away === match.away_score;
+  const clock       = liveClock(match, t);
 
   return (
     <div
@@ -63,11 +86,10 @@ export function MatchCard({ match, prediction, onPredict }: MatchCardProps) {
               {t("matchCard.penalties", { home: match.penalty_home, away: match.penalty_away })}
             </span>
           )}
-          {/* Minuto en vivo; en el descuento, "45+2" / "90+3" (la prórroga sigue: 91′…120′) */}
-          {match.status === "live" && match.elapsed != null ? (
-            <span className="text-xs text-red-400 font-mono font-semibold">
-              {match.elapsed}{match.elapsed_extra ? `+${match.elapsed_extra}` : ""}′
-            </span>
+          {/* Reloj en vivo: minuto ("45+2", "90+3"; la prórroga sigue 91′…120′) o la
+              etiqueta de la pausa (Descanso, Penales…); fuera de juego, la fecha. */}
+          {clock ? (
+            <span className="text-xs text-red-400 font-mono font-semibold">{clock}</span>
           ) : (
             <span className="text-xs text-ucl-silver/50 font-mono">
               {format(new Date(match.match_date), "d MMM · HH:mm", { locale: es })}

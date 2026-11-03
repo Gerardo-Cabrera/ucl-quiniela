@@ -39,6 +39,7 @@ export interface Match {
   penalty_away: number | null;
   elapsed: number | null;
   elapsed_extra: number | null;   // descuento en curso: "90+3"
+  api_status: string | null;      // status.short de la API: HT, BT, P, SUSP… (reloj en vivo)
   first_goal_team: string | null;
   first_goal_player: string | null;
   first_goal_player_id: number | null;   // acierto del primer gol por id (como el scoring)

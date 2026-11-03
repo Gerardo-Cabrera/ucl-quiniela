@@ -262,7 +262,32 @@
     "live": "En Vivo",
     "finished": "Finalizado",
     "postponed": "Pospuesto",
-    "liveBadge": "EN VIVO"
+    "liveBadge": "EN VIVO",
+    "halfTime": "Descanso",
+    "extraTimeBreak": "Descanso · prórroga",
+    "penaltyShootout": "Penales",
+    "suspended": "Suspendido",
+    "interrupted": "Interrumpido"
+  },
+  "backfill": {
+    "title": "Backfill",
+    "subtitle": "Cargar o corregir los pronósticos de un participante hechos fuera de la app · solo admin",
+    "hint": "Sin plazo: admite partidos ya jugados (si terminaron, se puntúan al instante). Reenviar el mismo partido corrige, no duplica.",
+    "participant": "Participante",
+    "selectParticipant": "Elige un participante",
+    "phase": "Fase",
+    "selectMatch": "Elige un partido",
+    "home": "Goles local",
+    "away": "Goles visitante",
+    "scorer": "Primer goleador (opcional)",
+    "noScorer": "— Sin primer goleador —",
+    "scorerGoalless": "Un 0-0 no lleva primer goleador",
+    "addRow": "Añadir partido",
+    "removeRow": "Quitar partido",
+    "submit": "Cargar",
+    "loading": "Cargando...",
+    "loaded": "{{count}} pronósticos cargados",
+    "error": "No se pudo cargar. Revisa los datos."
   },
   "backfill": {
     "title": "Backfill",
