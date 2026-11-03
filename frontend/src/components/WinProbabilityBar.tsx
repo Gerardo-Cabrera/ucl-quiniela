@@ -32,10 +32,13 @@ export function WinProbabilityBar({ match, placeholder = false }: { match: Match
         <div className="bg-ucl-silver/50" style={{ width: `${draw ?? 0}%` }} />
         <div className="bg-blue-400"      style={{ width: `${away ?? 0}%` }} />
       </div>
-      <div className="flex items-center justify-between mt-1 text-[11px] font-mono">
-        <span className="text-ucl-gold">{home ?? 0}%</span>
-        <span className="text-ucl-silver/60">{t("probability.label")} · {t("probability.draw")} {draw ?? 0}%</span>
-        <span className="text-blue-300">{away ?? 0}%</span>
+      {/* Una etiqueta por tramo, alineada con su equipo: "Victoria" a cada lado (local a
+          la izquierda, visitante a la derecha, con el color de su tramo) y "Empate" en
+          el centro, para que la barra se entienda sin tooltip. */}
+      <div className="flex items-center justify-between gap-2 mt-1 text-[11px] font-mono">
+        <span className="text-ucl-gold">{t("probability.win")} {home ?? 0}%</span>
+        <span className="text-ucl-silver/60">{t("probability.draw")} {draw ?? 0}%</span>
+        <span className="text-blue-300">{t("probability.win")} {away ?? 0}%</span>
       </div>
     </div>
   );
