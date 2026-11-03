@@ -6,6 +6,7 @@ import type { TFunction } from "i18next";
 import type { Match, Prediction } from "@/types";
 import { Badge, StatusDot, PointsChip, TeamLogo } from "@/components/ui";
 import { FirstGoalLine } from "@/components/FirstGoalLine";
+import { WinProbabilityBar } from "@/components/WinProbabilityBar";
 import { clsx } from "clsx";
 
 interface MatchCardProps {
@@ -103,6 +104,9 @@ export function MatchCard({ match, prediction, onPredict }: MatchCardProps) {
           <span className="text-sm text-center font-medium leading-tight">{match.away_team}</span>
         </div>
       </div>
+
+      {/* Probabilidad de victoria pre-partido (solo el próximo partido de cada equipo). */}
+      <WinProbabilityBar match={match} />
 
       {/* Primer goleador real: en cuanto se conoce (en vivo o finalizado), para todos,
           tengan o no pronóstico. */}

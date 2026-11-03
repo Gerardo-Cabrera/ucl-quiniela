@@ -40,6 +40,12 @@ export interface Match {
   elapsed: number | null;
   elapsed_extra: number | null;   // descuento en curso: "90+3"
   api_status: string | null;      // status.short de la API: HT, BT, P, SUSP… (reloj en vivo)
+  // Probabilidad de victoria pre-partido (API-Football), solo del próximo partido de
+  // cada equipo; null si aún no se consultó o la API no la entrega.
+  prob_home: number | null;
+  prob_draw: number | null;
+  prob_away: number | null;
+  prob_updated_at: string | null;
   first_goal_team: string | null;
   first_goal_player: string | null;
   first_goal_player_id: number | null;   // acierto del primer gol por id (como el scoring)

@@ -113,6 +113,11 @@
       "finished": "Finalizados"
     }
   },
+  "probability": {
+    "label": "Probabilidad",
+    "draw": "Empate",
+    "title": "Probabilidad de victoria (local · empate · visitante) según API-Football, actualizada el {{date}}"
+  },
   "matchCard": {
     "yourPrediction": "Tu pronóstico:",
     "exact": "✓ Exacto",
