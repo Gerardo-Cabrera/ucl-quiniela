@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from contextlib import asynccontextmanager
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
@@ -52,6 +53,15 @@ app = FastAPI(
     version=settings.APP_VERSION,
     lifespan=lifespan,
 )
+
+# Compresión de respuestas de más de 1 KB cuando el cliente la acepta: /matches pesa
+# ~87 KB sin comprimir (~6 KB con gzip) y cada participante lo refresca cada minuto,
+# muchas veces desde el móvil; /tournament/players, ~180 KB. En Render no hay nginx
+# delante del API (solo en el modo compose de producción), así que comprime el backend.
+# Se registra PRIMERO (= el más interno, pegado a la app): add_middleware antepone, y si
+# quedara por fuera de SlowAPIMiddleware (un BaseHTTPMiddleware que reemite las respuestas
+# en streaming sin Content-Length) comprimiría también las pequeñas, ignorando el mínimo.
+app.add_middleware(GZipMiddleware, minimum_size=1024)
 
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)

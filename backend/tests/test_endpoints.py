@@ -1282,6 +1282,23 @@ async def test_matches_expose_win_probability_fields(auth_client: AsyncClient):
     assert match["prob_home"] is None
 
 
+# ── COMPRESIÓN ───────────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_large_json_responses_are_gzipped(auth_client: AsyncClient):
+    """/matches pesa ~90 KB sin comprimir y cada participante lo refresca cada minuto;
+    en Render no hay nginx delante del API, así que el backend comprime lo que supere
+    1 KB cuando el cliente lo acepta. Las respuestas pequeñas van tal cual."""
+    for i in range(1, 4):
+        await _create_match(api_fixture_id=1000 + i, match_date=datetime.now(timezone.utc) + timedelta(days=i))
+    resp = await auth_client.get("/api/matches/", headers={"Accept-Encoding": "gzip"})
+    assert resp.status_code == 200 and resp.headers.get("content-encoding") == "gzip"
+    assert len(resp.json()) == 3                                   # httpx descomprime solo
+    small = await auth_client.get("/api/config/teams", headers={"Accept-Encoding": "gzip"})
+    assert small.status_code == 200 and "content-encoding" not in small.headers
+
+
 # ── HEALTH ENDPOINTS ─────────────────────────────────────────────────────────
 
 
