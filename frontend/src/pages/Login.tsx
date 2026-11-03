@@ -9,6 +9,14 @@ type Mode = "login" | "register" | "reset";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+// Estrellas decorativas del fondo: posiciones fijas por carga. Generarlas dentro del
+// componente las sorteaba en cada render, así que saltaban con cada tecla del formulario.
+const STARS = Array.from({ length: 20 }, () => ({
+  top:            `${Math.random() * 100}%`,
+  left:           `${Math.random() * 100}%`,
+  animationDelay: `${Math.random() * 3}s`,
+}));
+
 export default function LoginPage() {
   const { t } = useTranslation();
   const [mode, setMode]           = useState<Mode>("login");
@@ -83,16 +91,8 @@ export default function LoginPage() {
     <div className="min-h-screen ucl-stars-bg flex items-center justify-center p-4">
       {/* Stars decorativas */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        {[...Array(20)].map((_, i) => (
-          <div
-            key={i}
-            className="absolute w-1 h-1 bg-ucl-gold/30 rounded-full animate-pulse"
-            style={{
-              top:  `${Math.random() * 100}%`,
-              left: `${Math.random() * 100}%`,
-              animationDelay: `${Math.random() * 3}s`,
-            }}
-          />
+        {STARS.map((style, i) => (
+          <div key={i} className="absolute w-1 h-1 bg-ucl-gold/30 rounded-full animate-pulse" style={style} />
         ))}
       </div>
 
