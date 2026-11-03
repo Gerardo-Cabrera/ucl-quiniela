@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { User } from "@/types";
 import apiClient from "@/api/client";
-import { AUTH_STORAGE_KEY } from "@/config";
+import { AUTH_STORAGE_KEY, LAST_ACTIVITY_KEY } from "@/config";
 
 interface AuthState {
   user: User | null;
@@ -24,7 +24,11 @@ export const useAuthStore = create<AuthState>()(
       isAuthenticated: false,
 
       login: async (identifier, password) => {
-        const { data } = await apiClient.post("/api/auth/login", { identifier, password });
+        const { data } = await apiClient.post("/api/auth/login", { identifier: identifier.trim(), password });
+        // Marca de actividad fresca: si quedaba una vieja de una sesión anterior (ni el
+        // logout manual ni el 401 la borraban), el control de inactividad cerraba la
+        // sesión nada más entrar ("Sesión cerrada por inactividad" tras un login válido).
+        localStorage.setItem(LAST_ACTIVITY_KEY, String(Date.now()));
         set({ user: data.user, token: data.access_token, isAuthenticated: true });
       },
 
@@ -51,6 +55,7 @@ export const useAuthStore = create<AuthState>()(
       },
 
       logout: () => {
+        localStorage.removeItem(LAST_ACTIVITY_KEY);
         set({ user: null, token: null, isAuthenticated: false });
       },
     }),
