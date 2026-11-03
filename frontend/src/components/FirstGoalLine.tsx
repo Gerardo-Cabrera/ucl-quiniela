@@ -21,7 +21,9 @@ interface Props {
 export function FirstGoalLine({ prediction, match, showReal = true, className }: Props) {
   const { t } = useTranslation();
   const picked   = prediction.first_goal_player;
-  const real     = match.first_goal_player;
+  // Goleador real o, mientras la API no lo atribuye, el equipo que marcó; ✓/✗ solo
+  // cuando se conoce el jugador (es lo que se puntúa).
+  const real     = match.first_goal_player ?? match.first_goal_team;
   const resolved = match.first_goal_player_id != null;
   const hit      = resolved
     && prediction.first_goal_player_id != null

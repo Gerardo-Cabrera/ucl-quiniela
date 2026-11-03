@@ -402,22 +402,35 @@ async def sync_win_probabilities(force: bool = False):
 async def _do_sync_first_goals():
     """Eventos (`/fixtures/events`) de los partidos EN VIVO o finalizados con algo
     pendiente; una petición por partido y corrida:
-    - **primer gol** (`first_goal_team` nulo con goles en el marcador): en vivo, en
-      cuanto hay gol, para que la tarjeta lo muestre y marque el acierto sin esperar
-      al final; si la API aún no trae el evento, se reintenta en la siguiente corrida;
+    - **primer gol**: pendiente mientras no se conozca el GOLEADOR (`first_goal_player_id`
+      nulo) con goles en el marcador. En vivo, en cuanto hay gol, para que la tarjeta lo
+      muestre y marque el acierto sin esperar al final; si la API aún no trae el evento,
+      o lo trae sin jugador (publica el gol y lo atribuye minutos después), se reintenta
+      en la siguiente corrida. Antes el sentinel era `first_goal_team`: un evento sin
+      jugador fijaba el equipo y el partido dejaba de consultarse, con lo que el goleador
+      no llegaba nunca (ni la tarjeta ni los puntos del primer gol). Finalizado el
+      partido, se insiste hasta FIRST_GOAL_GRACE_HOURS; después se asume que la API no
+      lo entregará;
     - **goles del partido** (`goal_events`, solo al finalizar): goleador + asistente,
       base de goleadores/asistidores. Se rellenan también en partidos ya resueltos.
     Se confía en los eventos: si al finalizar el primer gol cambió (gol anulado, otra
-    atribución) se corrige y las predicciones ya puntuadas se marcan para recálculo."""
+    atribución, jugador atribuido tarde) se corrige y las predicciones ya puntuadas se
+    marcan para recálculo."""
+    grace_cutoff = datetime.now(timezone.utc) - timedelta(hours=settings.FIRST_GOAL_GRACE_HOURS)
     async with AsyncSessionLocal() as db:
         result = await db.execute(
             select(Match).where(
                 Match.status.in_((MatchStatus.LIVE, MatchStatus.FINISHED)),
                 Match.home_score.is_not(None),
                 Match.away_score.is_not(None),
-                # Algo pendiente: el primer gol, o los goles del partido al finalizar.
                 or_(
-                    Match.first_goal_team.is_(None),
+                    # Goleador del primer gol aún desconocido (en vivo siempre; finalizado,
+                    # dentro del plazo de gracia).
+                    and_(
+                        Match.first_goal_player_id.is_(None),
+                        or_(Match.status == MatchStatus.LIVE, Match.match_date >= grace_cutoff),
+                    ),
+                    # Goles del partido por guardar al finalizar.
                     and_(Match.status == MatchStatus.FINISHED, Match.goal_events.is_(None)),
                 ),
                 # Solo si hubo gol (en el marcador, o ya registrado): los 0-0 no se consultan.
