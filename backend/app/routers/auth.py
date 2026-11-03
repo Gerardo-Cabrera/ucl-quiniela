@@ -20,7 +20,7 @@ async def register(request: Request, data: UserCreate, db: AsyncSession = Depend
         db, email=data.email, team_name=data.team_name, alias=data.alias
     )
     if conflict:
-        if conflict.email == data.email:
+        if conflict.email.lower() == data.email:
             detail = "Ese email ya está registrado."
         elif conflict.team_name == data.team_name:
             detail = "Ese nombre de equipo ya está en uso."
@@ -41,11 +41,16 @@ async def register(request: Request, data: UserCreate, db: AsyncSession = Depend
 @router.post("/login", response_model=Token)
 @limiter.limit(settings.RATE_LIMIT_AUTH)
 async def login(request: Request, data: UserLogin, db: AsyncSession = Depends(get_db)):
-    # El identificador puede ser el email, el alias o el nombre de equipo.
-    user = await user_crud.get_by_identifier(db, data.identifier)
-
-    # Una cuenta desactivada no entra (mismo 401 uniforme: no revela qué falló).
-    if not user or not user.is_active or not verify_password(data.password, user.hashed_password):
+    # El identificador puede ser el email, el alias o el nombre de equipo, sin distinguir
+    # mayúsculas. Si coincide con más de una cuenta (el alias de uno = el equipo de otro)
+    # decide la contraseña: se prueba contra cada candidata activa.
+    candidates = await user_crud.find_by_identifier(db, data.identifier)
+    user = next(
+        (u for u in candidates if u.is_active and verify_password(data.password, u.hashed_password)),
+        None,
+    )
+    # 401 uniforme: no revela si el identificador existe ni si la cuenta está desactivada.
+    if user is None:
         raise HTTPException(status_code=401, detail="Credenciales incorrectas.")
 
     token = create_access_token({"sub": str(user.id)})

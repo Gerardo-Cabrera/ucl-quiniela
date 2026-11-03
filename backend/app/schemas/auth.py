@@ -10,6 +10,13 @@ def _check_password(v: str) -> str:
     return v
 
 
+def _normalize_email(v: str) -> str:
+    """Email en minúsculas y sin espacios: EmailStr solo normaliza el dominio y dejaba la
+    parte local tal cual, así que 'Juan@x.com' y 'juan@x.com' eran cuentas distintas y el
+    login fallaba si no se repetía exactamente la misma capitalización."""
+    return v.strip().lower()
+
+
 def _normalize_alias(v: Optional[str]) -> Optional[str]:
     """Regla única del alias (registro y perfil): opcional; en blanco → None;
     si se indica, mín. 3 caracteres."""
@@ -50,6 +57,11 @@ class UserCreate(BaseModel):
     def _validate_alias(cls, v: Optional[str]) -> Optional[str]:
         return _normalize_alias(v)
 
+    @field_validator("email")
+    @classmethod
+    def _validate_email(cls, v: str) -> str:
+        return _normalize_email(v)
+
     @field_validator("password")
     @classmethod
     def _validate_password(cls, v: str) -> str:
@@ -74,6 +86,11 @@ class PasswordReset(BaseModel):
     email: EmailStr
     team_name: str = Field(min_length=1, max_length=100)
     new_password: str = Field(max_length=72)
+
+    @field_validator("email")
+    @classmethod
+    def _validate_email(cls, v: str) -> str:
+        return _normalize_email(v)
 
     @field_validator("new_password")
     @classmethod
@@ -100,9 +117,18 @@ class ProfileUpdate(BaseModel):
 
 
 class UserLogin(BaseModel):
-    # Identificador: email, alias o nombre de equipo.
+    # Identificador: email, alias o nombre de equipo (sin distinguir mayúsculas; los
+    # espacios alrededor se descartan). La contraseña se respeta tal cual.
     identifier: str = Field(min_length=1)
     password: str
+
+    @field_validator("identifier")
+    @classmethod
+    def _strip_identifier(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("Indica tu email, alias o nombre de equipo.")
+        return v
 
 
 class UserOut(BaseModel):

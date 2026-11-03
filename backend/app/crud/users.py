@@ -1,5 +1,5 @@
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, or_
+from sqlalchemy import func, or_, select
 from app.models.user import User
 
 
@@ -14,28 +14,39 @@ class UserCRUD:
         result = await db.execute(select(User).where(User.alias == alias))
         return result.scalar_one_or_none()
 
-    async def get_by_identifier(self, db: AsyncSession, identifier: str) -> User | None:
-        """Busca un usuario por email, alias o nombre de equipo (para el login)."""
+    async def find_by_identifier(self, db: AsyncSession, identifier: str) -> list[User]:
+        """Candidatos para el login: usuarios cuyo email, alias o nombre de equipo coincide
+        con `identifier` SIN distinguir mayúsculas ni espacios alrededor (los teclados
+        móviles capitalizan la primera letra y añaden espacios, y el email se guardaba con
+        la parte local tal como se escribió). Puede haber más de uno (el alias de A igual
+        al equipo de B, o dos equipos que solo difieren en mayúsculas): el login prueba la
+        contraseña contra cada uno en vez de quedarse con el primero."""
+        value = identifier.strip().lower()
+        if not value:
+            return []
         result = await db.execute(
-            select(User).where(
-                or_(
-                    User.email == identifier,
-                    User.alias == identifier,
-                    User.team_name == identifier,
-                )
-            )
+            select(User)
+            .where(or_(
+                func.lower(User.email) == value,
+                func.lower(User.alias) == value,
+                func.lower(User.team_name) == value,
+            ))
+            .order_by(User.id)
         )
-        return result.scalars().first()
+        return list(result.scalars().all())
 
     async def get_by_email_and_team(
         self, db: AsyncSession, email: str, team_name: str
     ) -> User | None:
-        """Usuario que coincide en email Y nombre de equipo (recuperación de
-        contraseña por datos de la cuenta, sin email)."""
+        """Usuario que coincide en email Y nombre de equipo, sin distinguir mayúsculas ni
+        espacios alrededor (recuperación de contraseña por datos de la cuenta)."""
         result = await db.execute(
-            select(User).where(User.email == email, User.team_name == team_name)
+            select(User).where(
+                func.lower(User.email) == email.strip().lower(),
+                func.lower(User.team_name) == team_name.strip().lower(),
+            )
         )
-        return result.scalar_one_or_none()
+        return result.scalars().first()
 
     async def update_password(
         self, db: AsyncSession, user: User, *, hashed_password: str
@@ -49,8 +60,10 @@ class UserCRUD:
         self, db: AsyncSession, *, email: str, team_name: str, alias: str | None
     ) -> User | None:
         """Devuelve el usuario existente que colisione en email, equipo o alias (para
-        rechazar el registro). El alias solo se compara si se indicó."""
-        conditions = [User.email == email, User.team_name == team_name]
+        rechazar el registro). El email se compara sin distinguir mayúsculas (dos cuentas
+        no deben diferir solo en eso); equipo y alias, tal cual. El alias solo se compara
+        si se indicó."""
+        conditions = [func.lower(User.email) == email.lower(), User.team_name == team_name]
         if alias is not None:
             conditions.append(User.alias == alias)
         result = await db.execute(select(User).where(or_(*conditions)))
