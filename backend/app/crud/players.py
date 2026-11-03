@@ -5,16 +5,23 @@ from app.crud._upsert import upsert_by_key
 
 
 class PlayerCRUD:
-    async def get_for_teams(self, db: AsyncSession, team_names: list[str]) -> list[Player]:
-        """Jugadores de los equipos dados (para el selector de primer goleador),
-        ordenados por equipo y nombre."""
+    async def get_for_teams(
+        self, db: AsyncSession, team_names: list[str], name_query: str | None = None
+    ) -> list[Player]:
+        """Jugadores de los equipos dados (selector de primer goleador), ordenados por
+        equipo y nombre. `name_query` filtra por subcadena del nombre sin distinguir
+        mayúsculas (nombre o apellido): lo usan `?search=` del endpoint de plantillas y
+        la resolución del goleador por nombre en el backfill."""
         if not team_names:
             return []
-        result = await db.execute(
-            select(Player)
-            .where(Player.team_name.in_(team_names))
-            .order_by(Player.team_name, Player.name)
-        )
+        stmt = select(Player).where(Player.team_name.in_(team_names))
+        query = (name_query or "").strip()
+        if query:
+            # Escapa los comodines de LIKE (\ primero, luego % y _) para tratar la
+            # entrada como subcadena LITERAL (si no, 'search=%' sería "sin filtro").
+            pattern = query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            stmt = stmt.where(Player.name.ilike(f"%{pattern}%", escape="\\"))
+        result = await db.execute(stmt.order_by(Player.team_name, Player.name))
         return list(result.scalars().all())
 
     async def get_by_api_id(self, db: AsyncSession, api_player_id: int) -> Player | None:

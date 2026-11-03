@@ -2,14 +2,17 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database import get_db
-from app.models.match import Match
+from app.models.match import Match, MatchStatus
+from app.models.prediction import Prediction
 from app.models.user import User
 from app.schemas import (
     PredictionCreate, PredictionOut, PredictionOverrideUpdate, PredictionOverrideOut,
+    PredictionBackfillItem, PredictionBackfillRequest,
 )
 from app.core.deps import get_current_user, get_admin_user
-from app.crud import prediction_crud, match_crud, player_crud, app_state_crud
+from app.crud import prediction_crud, match_crud, player_crud, app_state_crud, user_crud
 from app.services.prediction_window import ensure_predictable, annotate_predictable
+from app.services.scheduler import sync_first_goals, calculate_pending_points
 
 router = APIRouter(prefix="/predictions", tags=["Predictions"])
 
@@ -91,26 +94,15 @@ async def create_or_update_prediction(
         db, match, data.first_goal_player_id
     )
 
-    existing = await prediction_crud.get_by_user_and_match(db, current_user.id, data.match_id)
-
-    if existing:
-        prediction = await prediction_crud.update(
-            db, existing,
-            predicted_home=data.predicted_home,
-            predicted_away=data.predicted_away,
-            first_goal_player_id=fg_player_id,
-            first_goal_player=fg_player_name,
-        )
-    else:
-        prediction = await prediction_crud.create(
-            db,
-            user_id=current_user.id,
-            match_id=data.match_id,
-            predicted_home=data.predicted_home,
-            predicted_away=data.predicted_away,
-            first_goal_player_id=fg_player_id,
-            first_goal_player=fg_player_name,
-        )
+    prediction = await prediction_crud.upsert(
+        db,
+        user_id=current_user.id,
+        match_id=data.match_id,
+        predicted_home=data.predicted_home,
+        predicted_away=data.predicted_away,
+        first_goal_player_id=fg_player_id,
+        first_goal_player=fg_player_name,
+    )
     await annotate_predictable(db, [prediction.match], _TOURNAMENT_TZ)
     return prediction
 
@@ -128,3 +120,113 @@ async def delete_prediction(
     # partido) el pronóstico queda sellado, tampoco se borra.
     await ensure_predictable(db, await match_crud.get_by_id(db, prediction.match_id), _TOURNAMENT_TZ)
     await prediction_crud.delete(db, prediction)
+
+
+# ── Backfill admin ────────────────────────────────────────────────────────────
+
+async def _resolve_backfill_match(
+    db: AsyncSession, item: PredictionBackfillItem
+) -> tuple[Match, int, int]:
+    """Partido de un item del backfill, por `match_id` o por el par de equipos, con el
+    marcador orientado al local/visitante del fixture (por si el par viene invertido)."""
+    if item.match_id is not None:
+        match = await match_crud.get_by_id(db, item.match_id)
+        if not match:
+            raise HTTPException(status_code=404, detail=f"Partido {item.match_id} no encontrado.")
+        return match, item.predicted_home, item.predicted_away
+
+    matches = await match_crud.get_by_teams(db, item.home_team, item.away_team)
+    if not matches:
+        raise HTTPException(
+            status_code=404, detail=f"No hay partido entre '{item.home_team}' y '{item.away_team}'."
+        )
+    if len(matches) > 1:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Hay {len(matches)} partidos entre '{item.home_team}' y '{item.away_team}' "
+                   "(ida y vuelta): usa match_id.",
+        )
+    match = matches[0]
+    if item.home_team == match.home_team:
+        return match, item.predicted_home, item.predicted_away
+    return match, item.predicted_away, item.predicted_home
+
+
+async def _resolve_first_goal(
+    db: AsyncSession, match: Match, player_id: int | None, player_name: str | None
+) -> tuple[int | None, str | None]:
+    """Primer goleador del backfill: por id (misma validación que el POST del usuario)
+    o por nombre, buscado en las plantillas del partido. Sin coincidencia o ambiguo → 400."""
+    if player_id is not None:
+        return await _validate_first_goal_player(db, match, player_id)
+    if player_name is None:
+        return None, None
+    players = await player_crud.get_for_teams(
+        db, [match.home_team, match.away_team], name_query=player_name
+    )
+    if not players:
+        raise HTTPException(
+            status_code=400,
+            detail=f"No hay jugador '{player_name}' en {match.home_team} ni {match.away_team}.",
+        )
+    if len(players) > 1:
+        raise HTTPException(
+            status_code=400,
+            detail=f"'{player_name}' es ambiguo ({len(players)} jugadores): precisa el nombre "
+                   "o usa first_goal_player_id.",
+        )
+    return players[0].api_player_id, players[0].name
+
+
+@router.post(
+    "/admin/backfill",
+    response_model=list[PredictionOut],
+    status_code=201,
+    summary="Admin: cargar pronósticos de un participante (backfill)",
+)
+async def backfill_predictions(
+    data: PredictionBackfillRequest,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_admin_user),
+):
+    """Carga (o corrige) los pronósticos de UN participante hechos fuera de la app
+    (papel, WhatsApp). A diferencia del POST del usuario NO valida el plazo de la
+    jornada ni el estado del partido (por eso es admin): sirve para partidos ya
+    jugados. Upsert por (usuario, partido): reenviar corrige, no duplica. Atómico: un
+    item inválido (404/400) no carga ninguno. Si algún partido ya FINALIZÓ, corre el
+    mismo pipeline del scheduler (primer gol → puntos) para puntuarlo al instante, sin
+    esperar al timer de respaldo."""
+    user = await user_crud.get_by_team_name(db, data.team_name)
+    if not user:
+        raise HTTPException(status_code=404, detail=f"Participante '{data.team_name}' no encontrado.")
+
+    saved: list[Prediction] = []
+    any_finished = False
+    for item in data.predictions:
+        match, home, away = await _resolve_backfill_match(db, item)
+        any_finished = any_finished or match.status == MatchStatus.FINISHED
+        fg_player_id, fg_player_name = await _resolve_first_goal(
+            db, match, item.first_goal_player_id, item.first_goal_player
+        )
+        saved.append(await prediction_crud.upsert(
+            db,
+            user_id=user.id,
+            match_id=match.id,
+            predicted_home=home,
+            predicted_away=away,
+            first_goal_player_id=fg_player_id,
+            first_goal_player=fg_player_name,
+        ))
+
+    if any_finished:
+        # Los jobs abren su propia sesión y solo ven lo confirmado: commit antes. Mismo
+        # orden que el scheduler (primer gol → puntos); ambos van envueltos en _retry.
+        await db.commit()
+        await sync_first_goals()
+        await calculate_pending_points()
+        # Devolver el estado ya puntuado (los jobs escribieron en otra sesión).
+        for pred in saved:
+            await db.refresh(pred)
+            await db.refresh(pred.match)
+    await annotate_predictable(db, [p.match for p in saved], _TOURNAMENT_TZ)
+    return saved

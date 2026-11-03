@@ -8,6 +8,7 @@ import pytest
 from httpx import AsyncClient
 
 from app.models.match import Match, MatchPhase, MatchStatus
+from app.services import scheduler as scheduler_module, ucl_api
 from tests.conftest import TestSessionLocal
 
 
@@ -999,6 +1000,177 @@ async def test_sync_squads_conflict_when_in_progress(admin_client: AsyncClient, 
     resp = await admin_client.post("/api/matches/sync-squads")
     assert resp.status_code == 409
     assert calls == []
+
+
+# ── BACKFILL ADMIN ───────────────────────────────────────────────────────────
+
+BACKFILL = "/api/predictions/admin/backfill"
+
+
+@pytest.fixture(autouse=True)
+def _jobs_use_test_db(monkeypatch):
+    """El backfill de un partido finalizado dispara los jobs del scheduler, que abren su
+    propia sesión: apuntarlos a la BD de test (inocuo para el resto de tests)."""
+    monkeypatch.setattr(scheduler_module, "AsyncSessionLocal", TestSessionLocal)
+
+
+def _goal_event(player_id: int, name: str, team: str, minute: int = 23) -> dict:
+    return {"time": {"elapsed": minute, "extra": None}, "type": "Goal", "detail": "Normal Goal",
+            "team": {"name": team}, "player": {"id": player_id, "name": name}, "assist": {"id": None, "name": None}}
+
+
+@pytest.mark.asyncio
+async def test_backfill_requires_admin(auth_client: AsyncClient):
+    resp = await auth_client.post(BACKFILL, json={
+        "team_name": "Jax FC", "predictions": [{"match_id": 1, "predicted_home": 1, "predicted_away": 0}],
+    })
+    assert resp.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_backfill_loads_finished_match_without_date_check(admin_client: AsyncClient):
+    """Carga un pronóstico de un partido ya jugado (el POST normal lo rechaza) y lo deja
+    pendiente de puntuar si aún no hay marcador; reenviar corrige, no duplica."""
+    match_id = await _create_match(status=MatchStatus.FINISHED,
+                                   match_date=datetime.now(timezone.utc) - timedelta(days=2))
+    assert (await admin_client.post("/api/predictions/", json={
+        "match_id": match_id, "predicted_home": 2, "predicted_away": 1})).status_code == 400
+
+    resp = await admin_client.post(BACKFILL, json={
+        "team_name": "Jax FC",
+        "predictions": [{"match_id": match_id, "predicted_home": 2, "predicted_away": 1, "first_goal_player_id": 10}],
+    })
+    assert resp.status_code == 201
+    data = resp.json()
+    assert len(data) == 1
+    assert (data[0]["first_goal_player"], data[0]["is_calculated"]) == ("Vinicius Jr", False)
+
+    resp2 = await admin_client.post(BACKFILL, json={
+        "team_name": "Jax FC", "predictions": [{"match_id": match_id, "predicted_home": 3, "predicted_away": 0}],
+    })
+    assert resp2.status_code == 201
+    mine = (await admin_client.get("/api/predictions/")).json()
+    assert len(mine) == 1 and mine[0]["predicted_home"] == 3
+
+
+@pytest.mark.asyncio
+async def test_backfill_finished_match_scores_immediately(admin_client: AsyncClient, monkeypatch):
+    """Con el partido finalizado y marcador, dispara primer gol → puntos y devuelve la
+    predicción YA puntuada (liga: exacto 8 + victoria 5 + primer gol 3 = 16)."""
+    match_id = await _create_match(status=MatchStatus.FINISHED, home_score=2, away_score=1,
+                                   match_date=datetime.now(timezone.utc) - timedelta(hours=2))
+
+    async def fake_events(fixture_id: int) -> list[dict]:
+        return [_goal_event(10, "Vinicius Jr", "Real Madrid")]
+
+    monkeypatch.setattr(ucl_api, "fetch_fixture_events", fake_events)
+    resp = await admin_client.post(BACKFILL, json={
+        "team_name": "Jax FC",
+        "predictions": [{"match_id": match_id, "predicted_home": 2, "predicted_away": 1, "first_goal_player_id": 10}],
+    })
+    assert resp.status_code == 201
+    pred = resp.json()[0]
+    assert (pred["is_calculated"], pred["points_earned"], pred["first_goal_points"]) == (True, 16, 3)
+    assert pred["match"]["first_goal_player"] == "Vinicius Jr"
+
+
+@pytest.mark.asyncio
+async def test_backfill_by_team_names_orients_score(admin_client: AsyncClient):
+    """Partido por el PAR de equipos (sin match_id); el marcador se orienta al
+    local/visitante del fixture aunque el par venga invertido."""
+    match_id = await _create_match(status=MatchStatus.FINISHED,
+                                   match_date=datetime.now(timezone.utc) - timedelta(days=2))
+    resp = await admin_client.post(BACKFILL, json={
+        "team_name": "Jax FC",
+        "predictions": [{"home_team": "Barcelona", "away_team": "Real Madrid", "predicted_home": 1, "predicted_away": 2}],
+    })
+    assert resp.status_code == 201
+    pred = resp.json()[0]
+    assert (pred["match_id"], pred["predicted_home"], pred["predicted_away"]) == (match_id, 2, 1)
+
+    assert (await admin_client.post(BACKFILL, json={
+        "team_name": "Jax FC",
+        "predictions": [{"home_team": "Narnia", "away_team": "Wakanda", "predicted_home": 0, "predicted_away": 0}],
+    })).status_code == 404
+    assert (await admin_client.post(BACKFILL, json={
+        "team_name": "Jax FC", "predictions": [{"predicted_home": 1, "predicted_away": 0}],
+    })).status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_backfill_two_legs_require_match_id(admin_client: AsyncClient):
+    """Ida y vuelta (mismo par dos veces): el par es ambiguo → 400 pidiendo match_id."""
+    await _create_match(api_fixture_id=2001, phase=MatchPhase.ROUND_OF_16)
+    await _create_match(api_fixture_id=2002, phase=MatchPhase.ROUND_OF_16,
+                        home_team="Barcelona", away_team="Real Madrid")
+    resp = await admin_client.post(BACKFILL, json={
+        "team_name": "Jax FC",
+        "predictions": [{"home_team": "Real Madrid", "away_team": "Barcelona", "predicted_home": 1, "predicted_away": 0}],
+    })
+    assert resp.status_code == 400
+    assert "match_id" in resp.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_backfill_scorer_by_name(admin_client: AsyncClient):
+    """Goleador por nombre (subcadena única en las plantillas del partido); sin
+    coincidencia o ambiguo → 400."""
+    match_id = await _create_match()
+    resp = await admin_client.post(BACKFILL, json={
+        "team_name": "Jax FC",
+        "predictions": [{"match_id": match_id, "predicted_home": 2, "predicted_away": 1, "first_goal_player": "lewand"}],
+    })
+    assert resp.status_code == 201
+    assert (resp.json()[0]["first_goal_player"], resp.json()[0]["first_goal_player_id"]) == ("Lewandowski", 20)
+
+    for name in ("Cristiano", "a"):   # inexistente / ambiguo (Bellingham, Lewandowski, Lamine Yamal)
+        bad = await admin_client.post(BACKFILL, json={
+            "team_name": "Jax FC",
+            "predictions": [{"match_id": match_id, "predicted_home": 1, "predicted_away": 0, "first_goal_player": name}],
+        })
+        assert bad.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_backfill_rejects_scorer_on_goalless(admin_client: AsyncClient):
+    match_id = await _create_match()
+    resp = await admin_client.post(BACKFILL, json={
+        "team_name": "Jax FC",
+        "predictions": [{"match_id": match_id, "predicted_home": 0, "predicted_away": 0, "first_goal_player": "Vinicius"}],
+    })
+    assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_backfill_unknown_participant(admin_client: AsyncClient):
+    resp = await admin_client.post(BACKFILL, json={
+        "team_name": "Equipo Fantasma", "predictions": [{"match_id": 1, "predicted_home": 1, "predicted_away": 0}],
+    })
+    assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_backfill_is_atomic(admin_client: AsyncClient):
+    """Un item inválido (partido inexistente) no carga ninguno de la llamada."""
+    match_id = await _create_match()
+    resp = await admin_client.post(BACKFILL, json={
+        "team_name": "Jax FC",
+        "predictions": [
+            {"match_id": match_id, "predicted_home": 1, "predicted_away": 0},
+            {"match_id": 99999, "predicted_home": 1, "predicted_away": 0},
+        ],
+    })
+    assert resp.status_code == 404
+    assert (await admin_client.get("/api/predictions/")).json() == []
+
+
+@pytest.mark.asyncio
+async def test_match_players_search(auth_client: AsyncClient):
+    """`?search=` filtra la plantilla por subcadena literal del nombre."""
+    match_id = await _create_match()
+    names = [p["name"] for p in (await auth_client.get(f"/api/matches/{match_id}/players?search=LEWA")).json()]
+    assert names == ["Lewandowski"]
+    assert (await auth_client.get(f"/api/matches/{match_id}/players?search=%25")).json() == []   # '%' literal
 
 
 # ── HEALTH ENDPOINTS ─────────────────────────────────────────────────────────

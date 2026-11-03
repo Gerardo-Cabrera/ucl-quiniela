@@ -1,5 +1,5 @@
 import { NavLink, useNavigate } from "react-router-dom";
-import { Trophy, CalendarDays, ListChecks, Star, Target, CalendarRange, Crown, LogOut, User } from "lucide-react";
+import { Trophy, CalendarDays, ListChecks, Star, Target, CalendarRange, Crown, LogOut, User, Upload } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useAuthStore } from "@/store/authStore";
 import { clsx } from "clsx";
@@ -14,10 +14,17 @@ const NAV_ITEMS = [
   { to: "/mvps",        labelKey: "nav.mvps",        icon: Crown },
 ];
 
+// Solo admin: carga de pronósticos de un participante (backfill). En escritorio va al
+// final del sidebar; en móvil, como icono en la barra superior (el bottom-nav ya lleva
+// 7 ítems y es para todos).
+const ADMIN_ITEM = { to: "/backfill", labelKey: "nav.backfill", icon: Upload };
+
 export function Navbar() {
   const { t } = useTranslation();
   const { user, logout } = useAuthStore();
   const navigate = useNavigate();
+  const isAdmin = user?.is_admin ?? false;
+  const sidebarItems = isAdmin ? [...NAV_ITEMS, ADMIN_ITEM] : NAV_ITEMS;
 
   const handleLogout = () => {
     logout();
@@ -36,7 +43,7 @@ export function Navbar() {
 
         {/* Nav links */}
         <nav className="flex-1 px-3 py-4 space-y-1">
-          {NAV_ITEMS.map(({ to, labelKey, icon: Icon }) => (
+          {sidebarItems.map(({ to, labelKey, icon: Icon }) => (
             <NavLink
               key={to}
               to={to}
@@ -81,6 +88,16 @@ export function Navbar() {
       <header className="lg:hidden fixed top-0 left-0 right-0 z-50 h-14 bg-ucl-navy/95 backdrop-blur border-b border-ucl-blue/40 flex items-center justify-between px-4">
         <h1 className="font-display text-2xl text-ucl-gold tracking-wider">{t("brand.name")}</h1>
         <div className="flex items-center gap-1">
+          {isAdmin && (
+            <button
+              onClick={() => navigate(ADMIN_ITEM.to)}
+              aria-label={t(ADMIN_ITEM.labelKey)}
+              title={t(ADMIN_ITEM.labelKey)}
+              className="p-2 rounded-lg text-ucl-silver hover:text-ucl-white hover:bg-ucl-blue/30 transition-colors"
+            >
+              <Upload size={18} />
+            </button>
+          )}
           <button
             onClick={() => navigate("/profile")}
             aria-label={t("nav.profile")}

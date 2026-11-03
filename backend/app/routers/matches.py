@@ -44,15 +44,18 @@ async def get_match(
 @router.get("/{match_id}/players", response_model=list[PlayerOut])
 async def get_match_players(
     match_id: int,
+    search: str | None = None,
     db: AsyncSession = Depends(get_db),
     _: User = Depends(get_current_user),
 ):
     """Plantillas de los dos equipos del partido, para elegir el primer goleador.
-    Vacío si aún no se han sincronizado las plantillas."""
+    `?search=` filtra por subcadena del nombre (literal, sin distinguir mayúsculas):
+    sirve para obtener el id de un goleador para el backfill admin. Vacío si aún no
+    se han sincronizado las plantillas."""
     match = await match_crud.get_by_id(db, match_id)
     if not match:
         raise HTTPException(status_code=404, detail="Partido no encontrado.")
-    return await player_crud.get_for_teams(db, [match.home_team, match.away_team])
+    return await player_crud.get_for_teams(db, [match.home_team, match.away_team], name_query=search)
 
 
 @router.post("/sync", status_code=202, summary="Admin: Forzar sync con API-Football")
