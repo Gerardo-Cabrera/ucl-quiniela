@@ -126,7 +126,7 @@ docker compose exec backend pytest
 
 ## Revisión de PRs (IA)
 
-Los PR se revisan con [PR-Agent](https://github.com/qodo-ai/pr-agent) (open-source)
+Los PR se revisan con [PR-Agent](https://github.com/The-PR-Agent/pr-agent) (open-source)
 usando el **free tier** de Google Gemini (sin coste). Para activarlo:
 
 1. Crea una API key gratuita en [Google AI Studio](https://aistudio.google.com/apikey).

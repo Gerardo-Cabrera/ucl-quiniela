@@ -316,6 +316,26 @@ async def test_update_team_name_success(auth_client: AsyncClient):
 
 
 @pytest.mark.asyncio
+async def test_update_team_name_keeps_alias(auth_client: AsyncClient):
+    """Regresión: un PATCH con solo team_name borraba el alias (la asignación quedaba
+    fuera del `if`). Un alias ausente del body se conserva."""
+    await auth_client.patch("/api/auth/me", json={"alias": "Fijo"})
+    resp = await auth_client.patch("/api/auth/me", json={"team_name": "Solo Equipo FC"})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert (body["team_name"], body["alias"]) == ("Solo Equipo FC", "Fijo")
+
+
+@pytest.mark.asyncio
+async def test_update_alias_null_clears(auth_client: AsyncClient):
+    """El frontend envía `alias: null` para quitarlo (equivale a "" por el validador)."""
+    await auth_client.patch("/api/auth/me", json={"alias": "Temporal"})
+    resp = await auth_client.patch("/api/auth/me", json={"team_name": "Mismo FC", "alias": None})
+    assert resp.status_code == 200
+    assert resp.json()["alias"] is None
+
+
+@pytest.mark.asyncio
 async def test_update_team_name_conflict(auth_client: AsyncClient):
     """No se puede tomar un nombre de equipo que ya usa otro usuario."""
     await auth_client.post("/api/auth/register", json={

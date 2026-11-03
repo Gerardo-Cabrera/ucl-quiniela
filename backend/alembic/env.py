@@ -9,7 +9,10 @@ import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from app.database import Base
-from app.models import User, Match, Prediction, Top8Pick  # noqa: F401 - needed for metadata
+# Importar el paquete registra TODOS los modelos en Base.metadata (autogenerate y
+# `alembic check` los necesitan completos; importar solo algunos nombres funcionaba por
+# efecto colateral del __init__ y daba a entender que el resto no contaba).
+import app.models  # noqa: F401
 from app.config import settings
 
 config = context.config
