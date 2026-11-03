@@ -53,6 +53,9 @@ export function MatchCard({ match, prediction, onPredict, reserveProbability, re
     prediction.predicted_home === match.home_score &&
     prediction.predicted_away === match.away_score;
   const clock       = liveClock(match, t);
+  // Primer gol real: el goleador en cuanto la API lo atribuye; mientras tanto (la API
+  // publica el gol y lo atribuye minutos después) al menos el equipo que lo marcó.
+  const firstGoal   = match.first_goal_player ?? match.first_goal_team;
 
   return (
     <div
@@ -120,13 +123,13 @@ export function MatchCard({ match, prediction, onPredict, reserveProbability, re
       {/* Primer goleador real: en cuanto se conoce (en vivo o finalizado), para todos,
           tengan o no pronóstico. Sin dato pero con `reserveFirstGoal`, el hueco se
           conserva invisible (p. ej. un 0-0 junto a partidos con gol). */}
-      {(match.first_goal_player || reserveFirstGoal) && (
+      {(firstGoal || reserveFirstGoal) && (
         <div
-          className={clsx("-mt-2 mb-4 flex items-center justify-center gap-1.5 text-xs", !match.first_goal_player && "invisible")}
-          aria-hidden={!match.first_goal_player}
+          className={clsx("-mt-2 mb-4 flex items-center justify-center gap-1.5 text-xs", !firstGoal && "invisible")}
+          aria-hidden={!firstGoal}
         >
           <span className="text-ucl-silver/50">⚽ {t("common.firstGoalReal")}:</span>
-          <span className="font-medium text-ucl-white">{match.first_goal_player ?? "—"}</span>
+          <span className="font-medium text-ucl-white">{firstGoal ?? "—"}</span>
         </div>
       )}
 

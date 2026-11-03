@@ -112,7 +112,7 @@ export default function MatchesPage() {
             // probabilidad o el primer gol real, los demás reservan ese hueco para que
             // cada bloque (y el pie) quede al mismo nivel en toda la cuadrícula.
             const reserveProbability = group.items.some((m) => m.predictable && m.prob_home != null);
-            const reserveFirstGoal = group.items.some((m) => m.first_goal_player);
+            const reserveFirstGoal = group.items.some((m) => m.first_goal_player || m.first_goal_team);
             return (
               <section key={group.day}>
                 <DayHeader date={group.date} />
