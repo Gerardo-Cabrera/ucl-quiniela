@@ -4,6 +4,11 @@ import { API_BASE_URL, AUTH_STORAGE_KEY, LAST_ACTIVITY_KEY } from "@/config";
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
   headers: { "Content-Type": "application/json" },
+  // Tope por intento: sin él, un request que el servidor nunca responde (p. ej. uno que
+  // superó el tiempo del proxy) dejaba el spinner girando indefinidamente. 60 s cubre el
+  // arranque en frío de Render; al vencer se trata como "sin respuesta" (mensaje de
+  // conexión y, en GET/login, los reintentos de abajo).
+  timeout: 60_000,
 });
 
 /**
