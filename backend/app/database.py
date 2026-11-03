@@ -5,7 +5,9 @@ from app.config import settings
 
 engine = create_async_engine(
     settings.DATABASE_URL,
-    echo=settings.APP_ENV == "development",
+    # Sin echo=True: añadía un handler propio a sqlalchemy.engine.Engine y cada
+    # sentencia salía dos veces (su handler + el raíz). El eco SQL se controla con
+    # SQL_ECHO en app/core/logging.py (un solo formato, un solo handler).
     # pool_pre_ping: descarta conexiones muertas al sacarlas del pool.
     # pool_recycle: además, no reutiliza conexiones de más de 5 min. El pooler de
     # Supabase (pgbouncer) cierra las conexiones ociosas y el keep-alive solo pinga

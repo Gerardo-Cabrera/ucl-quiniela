@@ -37,8 +37,11 @@ def setup_logging() -> None:
     handler.setFormatter(formatter)
     root_logger.addHandler(handler)
 
-    # Reducir ruido de librerías
-    logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
+    # Reducir ruido de librerías. El SQL solo se vuelca con SQL_ECHO=true (una línea
+    # por sentencia, por el handler raíz; sin el echo del engine, que duplicaba).
+    logging.getLogger("sqlalchemy.engine").setLevel(
+        logging.INFO if settings.SQL_ECHO else logging.WARNING
+    )
     logging.getLogger("apscheduler").setLevel(logging.WARNING)
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("httpcore").setLevel(logging.WARNING)

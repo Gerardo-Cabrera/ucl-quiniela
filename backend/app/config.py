@@ -84,6 +84,12 @@ class Settings(BaseSettings):
     # App
     APP_ENV: str = "development"
     APP_VERSION: str = "1.0.0"
+    # Volcar cada consulta SQL al log (nivel INFO de sqlalchemy.engine, mismo formato
+    # que el resto). Apagado por defecto incluso en desarrollo: el job de fixtures
+    # consulta la BD cada minuto y el eco ahogaba los logs útiles (y, vía echo=True
+    # del engine, cada sentencia salía dos veces). Enciéndelo puntualmente para ver
+    # qué consulta genera un endpoint.
+    SQL_ECHO: bool = False
     # str (no List[str]): pydantic-settings exige JSON en env vars para tipos
     # complejos y rompería el arranque con el formato simple del .env.
     CORS_ORIGINS: str = "http://localhost:5173"
