@@ -64,8 +64,8 @@ Las migraciones se aplican automáticamente al arrancar el backend
 
 ### 4. Crear el primer administrador (opcional)
 
-Los endpoints admin (forzar sync, calcular Top 8) requieren un usuario con
-`is_admin`. Tras registrarte en la app:
+Los endpoints admin (forzar sync, calcular Top 8, cargar pronósticos de un
+participante) requieren un usuario con `is_admin`. Tras registrarte en la app:
 
 ```bash
 psql -d ucl_quiniela -c "UPDATE users SET is_admin = true WHERE email = 'tu@email.com';"
