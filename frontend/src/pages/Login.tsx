@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type InputHTMLAttributes } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useAuthStore } from "@/store/authStore";
@@ -67,10 +67,14 @@ export default function LoginPage() {
     }
   };
 
+  // Los campos viven en un <form>: Enter envía de forma nativa (sin onKeyDown por campo,
+  // que con un form duplicaría la petición) y los gestores de contraseñas reconocen el
+  // formulario por `name`/`autoComplete`. `input` añade atributos propios de cada campo.
   const field = (
     label: string, value: string, onChange: (v: string) => void,
-    { type = "text", placeholder = "", aria = label, hint = "" }:
-      { type?: string; placeholder?: string; aria?: string; hint?: string } = {},
+    { type = "text", placeholder = "", aria = label, hint = "", input = {} }:
+      { type?: string; placeholder?: string; aria?: string; hint?: string;
+        input?: InputHTMLAttributes<HTMLInputElement> } = {},
   ) => (
     <div>
       <label className="block text-xs text-ucl-silver/70 mb-1.5 font-mono uppercase">{label}</label>
@@ -78,14 +82,18 @@ export default function LoginPage() {
         type={type}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
         placeholder={placeholder}
         className="input-base w-full"
         aria-label={aria}
+        {...input}
       />
       {hint && <p className="text-xs text-ucl-silver/50 mt-1.5">{hint}</p>}
     </div>
   );
+
+  // Identificadores (email, alias, equipo): sin autocapitalizar ni autocorregir, que es
+  // lo que los teclados móviles hacen por defecto y convertía "juan@…" en "Juan@…".
+  const PLAIN: InputHTMLAttributes<HTMLInputElement> = { autoCapitalize: "none", autoCorrect: "off", spellCheck: false };
 
   return (
     <div className="min-h-screen ucl-stars-bg flex items-center justify-center p-4">
@@ -131,22 +139,25 @@ export default function LoginPage() {
             <p className="text-xs text-ucl-silver/60 mb-4 -mt-2">{t("auth.resetHint")}</p>
           )}
 
-          <div className="space-y-4">
+          <form className="space-y-4" noValidate onSubmit={(e) => { e.preventDefault(); handleSubmit(); }}>
             {mode === "login" &&
-              field(t("auth.identifier"), identifier, setIdentifier, { placeholder: t("auth.identifierPlaceholder") })}
+              field(t("auth.identifier"), identifier, setIdentifier, {
+                placeholder: t("auth.identifierPlaceholder"),
+                input: { ...PLAIN, name: "username", autoComplete: "username" },
+              })}
 
             {mode === "register" && (
               <>
-                {field(t("auth.yourTeam"), teamName, setTeamName, { placeholder: t("auth.teamPlaceholder"), hint: t("auth.teamHint") })}
-                {field(t("auth.alias"), alias, setAlias, { placeholder: t("auth.aliasPlaceholder"), hint: t("auth.aliasHint") })}
-                {field(t("auth.email"), email, setEmail, { type: "email", placeholder: t("auth.emailPlaceholder"), aria: t("auth.emailAria"), hint: t("auth.emailHint") })}
+                {field(t("auth.yourTeam"), teamName, setTeamName, { placeholder: t("auth.teamPlaceholder"), hint: t("auth.teamHint"), input: { name: "team_name", autoComplete: "off" } })}
+                {field(t("auth.alias"), alias, setAlias, { placeholder: t("auth.aliasPlaceholder"), hint: t("auth.aliasHint"), input: { ...PLAIN, name: "alias", autoComplete: "nickname" } })}
+                {field(t("auth.email"), email, setEmail, { type: "email", placeholder: t("auth.emailPlaceholder"), aria: t("auth.emailAria"), hint: t("auth.emailHint"), input: { ...PLAIN, name: "email", autoComplete: "email", inputMode: "email" } })}
               </>
             )}
 
             {mode === "reset" && (
               <>
-                {field(t("auth.email"), email, setEmail, { type: "email", placeholder: t("auth.emailPlaceholder"), aria: t("auth.emailAria") })}
-                {field(t("auth.yourTeam"), teamName, setTeamName, { placeholder: t("auth.teamPlaceholder") })}
+                {field(t("auth.email"), email, setEmail, { type: "email", placeholder: t("auth.emailPlaceholder"), aria: t("auth.emailAria"), input: { ...PLAIN, name: "email", autoComplete: "email", inputMode: "email" } })}
+                {field(t("auth.yourTeam"), teamName, setTeamName, { placeholder: t("auth.teamPlaceholder"), input: { name: "team_name", autoComplete: "off" } })}
               </>
             )}
 
@@ -154,7 +165,8 @@ export default function LoginPage() {
               mode === "reset" ? t("auth.changePassword.new") : t("auth.password"),
               password, setPassword,
               { type: "password", placeholder: "••••••••", aria: t("auth.password"),
-                hint: mode === "login" ? "" : t("auth.passwordHint") },
+                hint: mode === "login" ? "" : t("auth.passwordHint"),
+                input: { name: "password", autoComplete: mode === "login" ? "current-password" : "new-password" } },
             )}
 
             {error && (
@@ -169,7 +181,7 @@ export default function LoginPage() {
             )}
 
             <button
-              onClick={handleSubmit}
+              type="submit"
               disabled={loading || !canSubmit}
               className="btn-primary w-full flex items-center justify-center gap-2 mt-2"
             >
@@ -190,7 +202,7 @@ export default function LoginPage() {
                 {t("auth.backToLogin")}
               </button>
             )}
-          </div>
+          </form>
         </div>
 
         <p className="text-center text-ucl-silver/40 text-xs mt-6 font-mono">

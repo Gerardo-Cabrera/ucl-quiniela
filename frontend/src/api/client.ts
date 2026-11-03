@@ -1,5 +1,5 @@
 import axios from "axios";
-import { API_BASE_URL, AUTH_STORAGE_KEY } from "@/config";
+import { API_BASE_URL, AUTH_STORAGE_KEY, LAST_ACTIVITY_KEY } from "@/config";
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -58,6 +58,7 @@ apiClient.interceptors.response.use(
     const isAuthRequest = cfg?.url?.includes("/api/auth/");
     if (status === 401 && !isAuthRequest) {
       localStorage.removeItem(AUTH_STORAGE_KEY);
+      localStorage.removeItem(LAST_ACTIVITY_KEY);   // que no herede inactividad el próximo login
       window.location.href = "/login";
     }
     return Promise.reject(err);

@@ -154,6 +154,53 @@ async def test_login_nonexistent_user(client: AsyncClient):
     assert resp.status_code == 401
 
 
+@pytest.mark.asyncio
+async def test_login_identifier_is_case_insensitive_and_trimmed(client: AsyncClient):
+    """Los teclados móviles capitalizan la primera letra y añaden espacios: el email, el
+    alias y el nombre de equipo se aceptan sin distinguir mayúsculas ni espacios
+    alrededor (antes solo valía la capitalización exacta del registro)."""
+    await _register(client, email="Case.User@test.com", team_name="Case Team", alias="caseAlias")
+    for ident in ["case.user@test.com", "CASE.USER@TEST.COM", " caseAlias ", "CASEALIAS", "case team", "  Case Team  "]:
+        resp = await client.post("/api/auth/login", json={"identifier": ident, "password": "pass1234"})
+        assert resp.status_code == 200, ident
+    assert (await client.post("/api/auth/login", json={"identifier": "   ", "password": "pass1234"})).status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_register_stores_email_lowercase_and_rejects_case_duplicate(client: AsyncClient):
+    """El email se guarda en minúsculas y dos cuentas no pueden diferir solo en mayúsculas."""
+    resp = await _register(client, email="Nuevo.User@Test.com", team_name="Lower Team", alias="loweralias")
+    assert resp.status_code == 201 and resp.json()["email"] == "nuevo.user@test.com"
+    dup = await client.post("/api/auth/register", json={
+        "team_name": "Otro Team", "email": "NUEVO.user@test.com", "password": "pass1234"})
+    assert dup.status_code == 409 and "email" in dup.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
+async def test_login_ambiguous_identifier_resolved_by_password(client: AsyncClient):
+    """El alias de uno coincide con el nombre de equipo de otro: cada cual entra con su
+    contraseña (antes se tomaba el primero y el otro recibía 401)."""
+    await client.post("/api/auth/register", json={"team_name": "Leo", "email": "a@test.com", "password": "passA123"})
+    await client.post("/api/auth/register", json={"team_name": "Equipo B", "email": "b@test.com", "password": "passB123", "alias": "Leo"})
+    ra = await client.post("/api/auth/login", json={"identifier": "Leo", "password": "passA123"})
+    rb = await client.post("/api/auth/login", json={"identifier": "Leo", "password": "passB123"})
+    assert (ra.status_code, ra.json()["user"]["email"]) == (200, "a@test.com")
+    assert (rb.status_code, rb.json()["user"]["email"]) == (200, "b@test.com")
+    assert (await client.post("/api/auth/login", json={"identifier": "Leo", "password": "otra"})).status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_reset_password_case_insensitive(client: AsyncClient):
+    """La recuperación también acepta email y equipo sin distinguir mayúsculas ni espacios."""
+    await client.post("/api/auth/register", json={
+        "team_name": "Reset Case FC", "email": "reset.case@test.com", "password": "origpass1"})
+    resp = await client.post("/api/auth/reset-password", json={
+        "email": "Reset.Case@Test.com", "team_name": " reset case fc ", "new_password": "flamante99"})
+    assert resp.status_code == 204
+    assert (await client.post("/api/auth/login", json={
+        "identifier": "reset.case@test.com", "password": "flamante99"})).status_code == 200
+
+
 # ── VALIDACIONES DE REGISTRO ──────────────────────────────────────────────────
 
 
