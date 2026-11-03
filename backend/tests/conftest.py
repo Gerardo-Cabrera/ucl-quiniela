@@ -4,8 +4,12 @@ Usa una base de datos SQLite en memoria para aislamiento.
 """
 import os
 
-# Debe definirse ANTES de importar la app para que Settings lo lea.
+# Deben definirse ANTES de importar la app para que Settings los lea.
 os.environ.setdefault("RATE_LIMIT_ENABLED", "false")
+# bcrypt a coste mínimo: la suite registra y entra cientos de veces y a 12 rondas
+# (~200 ms por hash) tardaba más de un minuto; a 4 rondas, ~1 ms. La verificación de
+# hashes reales (test_security) no depende de este valor.
+os.environ.setdefault("BCRYPT_ROUNDS", "4")
 
 import pytest_asyncio
 from httpx import AsyncClient, ASGITransport
