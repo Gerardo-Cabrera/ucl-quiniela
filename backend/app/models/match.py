@@ -64,6 +64,16 @@ class Match(Base):
     # goleadores/asistidores de la quiniela (fase de liga en adelante) sin cuota extra.
     goal_events: Mapped[list[dict] | None] = mapped_column(JSON, nullable=True)
 
+    # Probabilidad de victoria PRE-partido según API-Football (`/predictions`, `percent`
+    # local/empate/visitante en % enteros). Solo se consulta para el PRÓXIMO partido de
+    # cada equipo (una petición por partido: cuota) y se refresca cada
+    # SYNC_PROBABILITIES_HOURS mientras siga por jugarse. La tarjeta la muestra en
+    # Partidos → Próximos; None si aún no se consultó o la API no la entrega.
+    prob_home: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    prob_draw: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    prob_away: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    prob_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
     # Jornada de la fase de liga (ronda 'League Stage - N' de la API); None en
     # eliminatorias. Agrupa los días (martes a jueves) en la "jornada completa".
     round_number: Mapped[int | None] = mapped_column(Integer, nullable=True)

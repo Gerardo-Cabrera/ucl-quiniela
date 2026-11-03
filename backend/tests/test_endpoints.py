@@ -1173,6 +1173,40 @@ async def test_match_players_search(auth_client: AsyncClient):
     assert (await auth_client.get(f"/api/matches/{match_id}/players?search=%25")).json() == []   # '%' literal
 
 
+# ── ADMIN: SYNC DE PROBABILIDADES ────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_sync_probabilities_requires_admin(auth_client: AsyncClient):
+    assert (await auth_client.post("/api/matches/sync-probabilities")).status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_sync_probabilities_admin_triggers_job(admin_client: AsyncClient, monkeypatch):
+    """Admin: 202 y encola el job (sin tocar la API); `?force=true` se propaga."""
+    from app.routers import matches as matches_router
+
+    calls: list[bool] = []
+
+    async def fake_sync(force: bool = False) -> None:
+        calls.append(force)
+
+    monkeypatch.setattr(matches_router, "sync_win_probabilities", fake_sync)
+    assert (await admin_client.post("/api/matches/sync-probabilities")).status_code == 202
+    assert (await admin_client.post("/api/matches/sync-probabilities?force=true")).status_code == 202
+    assert calls == [False, True]
+
+
+@pytest.mark.asyncio
+async def test_matches_expose_win_probability_fields(auth_client: AsyncClient):
+    """La tarjeta lee la probabilidad del propio partido: viaja en /matches (null hasta
+    que el job la sincroniza)."""
+    await _create_match()
+    match = (await auth_client.get("/api/matches/")).json()[0]
+    assert {"prob_home", "prob_draw", "prob_away", "prob_updated_at"} <= set(match)
+    assert match["prob_home"] is None
+
+
 # ── HEALTH ENDPOINTS ─────────────────────────────────────────────────────────
 
 

@@ -222,6 +222,34 @@ async def fetch_squad(team_api_id: int) -> list[dict]:
     return _extract_response(response.json(), "players/squads")
 
 
+async def fetch_win_probability(fixture_id: int) -> list[dict]:
+    """Pronóstico pre-partido de API-Football (`/predictions?fixture`): probabilidades
+    local/empate/visitante, entre otros datos. Una petición por partido."""
+    response = await get_client().get(f"{BASE_URL}/predictions", params={"fixture": fixture_id})
+    response.raise_for_status()
+    return _extract_response(response.json(), "predictions")
+
+
+def _percent(value) -> int | None:
+    """'45%' → 45; None o ilegible → None."""
+    try:
+        return int(str(value).rstrip("%").strip())
+    except (TypeError, ValueError):
+        return None
+
+
+def parse_win_probability(data: list[dict]) -> dict | None:
+    """Probabilidades de `/predictions` → {prob_home, prob_draw, prob_away} (enteros en
+    %), o None si la API no las entrega (aún) para ese partido."""
+    percent = ((data[0].get("predictions") or {}).get("percent") or {}) if data else {}
+    probs = {
+        "prob_home": _percent(percent.get("home")),
+        "prob_draw": _percent(percent.get("draw")),
+        "prob_away": _percent(percent.get("away")),
+    }
+    return probs if all(v is not None for v in probs.values()) else None
+
+
 async def fetch_current_team(player_id: int) -> int | None:
     """Club actual de un jugador según su ÚLTIMO traspaso (`/transfers?player`).
     Resuelve al jugador que la API lista en DOS plantillas tras un traspaso (tarda

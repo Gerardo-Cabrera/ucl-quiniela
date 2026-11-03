@@ -53,6 +53,12 @@ class Settings(BaseSettings):
     # en el despliegue, no en una tarea en background que ya devolvió 202).
     API_REQUESTS_PER_MINUTE: int = Field(default=30, gt=0)
     CALC_POINTS_MINUTES: int = 30
+    # Probabilidad de victoria (/predictions de API-Football): una petición por PRÓXIMO
+    # partido de cada equipo (≤18 en fase de liga), solo si su kickoff cae dentro de
+    # PROBABILITIES_LOOKAHEAD_DAYS, y se refresca cada SYNC_PROBABILITIES_HOURS. Acotado
+    # así para caber en el plan gratuito (~100 req/día) junto a los demás jobs.
+    SYNC_PROBABILITIES_HOURS: int = 24
+    PROBABILITIES_LOOKAHEAD_DAYS: int = 7
     # Fallback: si un partido de fase de liga sigue LIVE pasados estos minutos desde
     # el kickoff, se da por finalizado (135 = 90' + descanso + añadido + margen). No
     # aplica a eliminatorias (prórroga/penales pueden superarlo).

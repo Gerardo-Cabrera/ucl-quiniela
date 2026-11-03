@@ -20,6 +20,12 @@ class MatchOut(BaseModel):
     # status.short de la API: en vivo, la tarjeta muestra "Descanso" (HT), la pausa de la
     # prórroga (BT), "Penales" (P) o suspendido/interrumpido en vez del minuto.
     api_status: Optional[str] = None
+    # Probabilidad de victoria pre-partido (API-Football), solo del próximo partido de
+    # cada equipo; null si no se consultó o la API no la entrega.
+    prob_home: Optional[int] = None
+    prob_draw: Optional[int] = None
+    prob_away: Optional[int] = None
+    prob_updated_at: Optional[datetime] = None
     first_goal_team: Optional[str]
     first_goal_player: Optional[str]
     # id del goleador real: la tarjeta marca el acierto del primer gol por id (como el scoring).
