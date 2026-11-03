@@ -87,6 +87,39 @@ class PredictionCRUD:
         await db.refresh(prediction, attribute_names=["match"])
         return prediction
 
+    async def upsert(
+        self,
+        db: AsyncSession,
+        *,
+        user_id: int,
+        match_id: int,
+        predicted_home: int,
+        predicted_away: int,
+        first_goal_player_id: int | None = None,
+        first_goal_player: str | None = None,
+    ) -> Prediction:
+        """Crea o actualiza el pronóstico de (usuario, partido): idempotente gracias a
+        UNIQUE(user_id, match_id). Lo comparten el POST del usuario y el backfill admin
+        (una sola regla de persistencia: al editar se resetean los puntos)."""
+        existing = await self.get_by_user_and_match(db, user_id, match_id)
+        if existing:
+            return await self.update(
+                db, existing,
+                predicted_home=predicted_home,
+                predicted_away=predicted_away,
+                first_goal_player_id=first_goal_player_id,
+                first_goal_player=first_goal_player,
+            )
+        return await self.create(
+            db,
+            user_id=user_id,
+            match_id=match_id,
+            predicted_home=predicted_home,
+            predicted_away=predicted_away,
+            first_goal_player_id=first_goal_player_id,
+            first_goal_player=first_goal_player,
+        )
+
     async def delete(self, db: AsyncSession, prediction: Prediction) -> None:
         await db.delete(prediction)
 

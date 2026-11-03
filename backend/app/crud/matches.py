@@ -1,6 +1,6 @@
 from datetime import date, datetime, timezone, tzinfo
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, or_, select
 from app.models.match import Match, MatchPhase, MatchStatus
 from app.core.time import as_utc, tz_day
 
@@ -24,6 +24,20 @@ class MatchCRUD:
     async def get_by_id(self, db: AsyncSession, match_id: int) -> Match | None:
         result = await db.execute(select(Match).where(Match.id == match_id))
         return result.scalar_one_or_none()
+
+    async def get_by_teams(self, db: AsyncSession, home_team: str, away_team: str) -> list[Match]:
+        """Partidos entre esos dos equipos en CUALQUIER orden (backfill por nombres, sin
+        conocer el id). En la fase de liga el par es único; en eliminatorias hay ida y
+        vuelta (dos partidos): el caller pide entonces `match_id`."""
+        result = await db.execute(
+            select(Match)
+            .where(or_(
+                and_(Match.home_team == home_team, Match.away_team == away_team),
+                and_(Match.home_team == away_team, Match.away_team == home_team),
+            ))
+            .order_by(Match.match_date)
+        )
+        return list(result.scalars().all())
 
     async def day_first_kickoffs(self, db: AsyncSession, tz: tzinfo) -> dict[date, datetime]:
         """Hora (UTC-aware) del PRIMER partido de cada jornada (día en la zona del
