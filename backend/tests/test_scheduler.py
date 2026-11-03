@@ -655,6 +655,61 @@ async def test_sync_first_goals_skips_live_match_already_resolved(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_sync_first_goals_retries_until_scorer_is_known(monkeypatch):
+    """La API publica el gol antes de atribuirlo: el primer evento llega sin jugador.
+    Se guarda el equipo (la tarjeta ya puede mostrarlo) pero el partido sigue pendiente
+    y en la siguiente corrida, con el jugador ya atribuido, queda resuelto. Antes el
+    equipo hacía de sentinel y el goleador no llegaba nunca."""
+    pred_id = await _seed(status=MatchStatus.LIVE, home_score=1, away_score=0)
+    events = [{"time": {"elapsed": 11, "extra": None}, "type": "Goal", "detail": "Normal Goal",
+               "team": {"name": "Real Madrid"}, "player": {"id": None, "name": None}}]
+    calls: list[int] = []
+
+    async def fake_fetch_events(fixture_id: int) -> list[dict]:
+        calls.append(fixture_id)
+        return events
+
+    monkeypatch.setattr(ucl_api, "fetch_fixture_events", fake_fetch_events)
+    await scheduler_module._do_sync_first_goals()
+    pred = await _get_prediction(pred_id)
+    async with TestSessionLocal() as session:
+        match = await session.get(Match, pred.match_id)
+    assert (match.first_goal_team, match.first_goal_player_id) == ("Real Madrid", None)
+
+    events[0]["player"] = {"id": 10, "name": "Vinicius Jr"}   # la API atribuye el gol
+    await scheduler_module._do_sync_first_goals()
+    assert len(calls) == 2                                     # se volvió a consultar
+    async with TestSessionLocal() as session:
+        match = await session.get(Match, pred.match_id)
+    assert (match.first_goal_player_id, match.first_goal_player) == (10, "Vinicius Jr")
+
+    await scheduler_module._do_sync_first_goals()              # resuelto: ya no se consulta
+    assert len(calls) == 2
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("hours_ago, expected_calls", [(2, 1), (72, 0)])
+async def test_sync_first_goals_finished_without_scorer_retries_within_grace(monkeypatch, hours_ago, expected_calls):
+    """Finalizado con goles guardados pero sin goleador atribuido: se insiste mientras
+    dure FIRST_GOAL_GRACE_HOURS (la API puede atribuirlo tarde); después se deja."""
+    pred_id = await _seed(first_goal_resolved=True, actual_scorer_id=None,
+                          match_date=datetime.now(timezone.utc) - timedelta(hours=hours_ago))
+    async with TestSessionLocal() as session:
+        match = await session.get(Match, (await session.get(Prediction, pred_id)).match_id)
+        match.goal_events = []
+        await session.commit()
+    calls: list[int] = []
+
+    async def fake_fetch_events(fixture_id: int) -> list[dict]:
+        calls.append(fixture_id)
+        return []
+
+    monkeypatch.setattr(ucl_api, "fetch_fixture_events", fake_fetch_events)
+    await scheduler_module._do_sync_first_goals()
+    assert len(calls) == expected_calls
+
+
+@pytest.mark.asyncio
 async def test_sync_first_goals_skips_goalless_match(monkeypatch):
     """Sin goles en el marcador no hay primer gol que buscar: no se gasta cuota."""
     await _seed(status=MatchStatus.LIVE, home_score=0, away_score=0)
