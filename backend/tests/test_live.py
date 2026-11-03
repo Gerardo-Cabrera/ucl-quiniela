@@ -62,6 +62,15 @@ def test_parse_not_played_statuses_are_postponed(status):
     assert ucl_api.parse_fixture(_fixture(status=status, elapsed=None))["status"] == MatchStatus.POSTPONED
 
 
+def test_parse_win_probability():
+    """`/predictions` entrega los porcentajes como texto ('45%'); se guardan enteros. Sin
+    los tres valores (la API aún no la calcula) → None."""
+    data = [{"predictions": {"percent": {"home": "45%", "draw": "30%", "away": "25%"}}}]
+    assert ucl_api.parse_win_probability(data) == {"prob_home": 45, "prob_draw": 30, "prob_away": 25}
+    assert ucl_api.parse_win_probability([]) is None
+    assert ucl_api.parse_win_probability([{"predictions": {"percent": {"home": None, "draw": "30%", "away": "25%"}}}]) is None
+
+
 def test_parse_round_number():
     """La jornada de la fase de liga sale de la ronda 'League Stage - N'; las
     eliminatorias no tienen número (se agrupan por fase)."""

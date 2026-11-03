@@ -124,6 +124,24 @@ Dentro del contenedor (no requiere instalar nada en el host):
 docker compose exec backend pytest
 ```
 
+## Flujo de ramas
+
+Todo cambio va a `develop` y llega a `main` por **pull request** (nunca push directo a
+`main`). Si el PR se fusiona con **squash**, `main` recibe un commit nuevo que `develop`
+no tiene; el siguiente PR mostrará conflictos en los archivos que tocó el anterior
+(aunque `develop` sea un superconjunto). Tras cada squash, sincroniza antes de seguir:
+
+```bash
+git checkout develop && git pull
+git merge origin/main        # sin conflictos reales: develop ya contiene esos cambios
+git push origin develop
+```
+
+Alternativa: fusionar los PR con **"Create a merge commit"**, que no desincroniza las ramas.
+Resuelve los conflictos en local (nunca en el editor web de GitHub, que ya dejó un bloque
+duplicado en un JSON de traducciones): `npm run lint` incluye una comprobación de claves
+duplicadas en `src/i18n/locales/*.json`.
+
 ## Revisión de PRs (IA)
 
 Los PR se revisan con [PR-Agent](https://github.com/The-PR-Agent/pr-agent) (open-source)

@@ -322,6 +322,83 @@ async def sync_players():
         await _retry(_do_sync_players, "sync_players")
 
 
+async def _next_match_ids_per_team(now: datetime, lookahead: timedelta) -> set[int]:
+    """Id del PRÓXIMO partido de cada equipo: el primer partido SCHEDULED con kickoff
+    futuro (y dentro de `lookahead`) en el que juega. En fase de liga son los ≤18 de la
+    jornada siguiente; en eliminatorias, los de la ronda. Una consulta ligera."""
+    async with AsyncSessionLocal() as db:
+        rows = (await db.execute(
+            select(Match.id, Match.home_team_api_id, Match.away_team_api_id)
+            .where(
+                Match.status == MatchStatus.SCHEDULED,
+                Match.match_date > now,
+                Match.match_date <= now + lookahead,
+            )
+            .order_by(Match.match_date, Match.id)
+        )).all()
+    first: dict[int, int] = {}
+    for mid, home_id, away_id in rows:
+        for tid in (home_id, away_id):
+            if tid is not None:
+                first.setdefault(tid, mid)
+    return set(first.values())
+
+
+async def _do_sync_win_probabilities(force: bool = False) -> None:
+    """Probabilidad de victoria (`/predictions`) del próximo partido de cada equipo. Solo
+    pide las que falten o lleven más de SYNC_PROBABILITIES_HOURS (`force` las pide
+    todas): un reinicio no repite peticiones y un partido ya jugado deja de consultarse
+    (ya no es "próximo"). Un partido sin probabilidad en la API se reintenta en la
+    siguiente corrida."""
+    now = datetime.now(timezone.utc)
+    ids = await _next_match_ids_per_team(now, timedelta(days=settings.PROBABILITIES_LOOKAHEAD_DAYS))
+    if not ids:
+        logger.info("Probabilidades: sin partidos próximos en %d días.", settings.PROBABILITIES_LOOKAHEAD_DAYS)
+        return
+    cutoff = now - timedelta(hours=settings.SYNC_PROBABILITIES_HOURS)
+    async with AsyncSessionLocal() as db:
+        rows = (await db.execute(
+            select(Match.id, Match.api_fixture_id, Match.prob_updated_at).where(Match.id.in_(ids))
+        )).all()
+    stale = [
+        (mid, fid) for mid, fid, updated in rows
+        if force or updated is None or as_utc(updated) < cutoff
+    ]
+    if not stale:
+        logger.info("Probabilidades al día (%d partidos próximos).", len(rows))
+        return
+
+    results = await _fetch_paced(ucl_api.fetch_win_probability, [fid for _, fid in stale])
+    updated = failed = 0
+    async with AsyncSessionLocal() as db:
+        for (mid, fid), result in zip(stale, results):
+            if isinstance(result, Exception):
+                failed += 1
+                logger.warning("No se pudo obtener la probabilidad del fixture %s: %s", fid, result)
+                continue
+            probs = ucl_api.parse_win_probability(result)
+            match = await db.get(Match, mid)
+            if probs is None or match is None:
+                continue
+            match.prob_home, match.prob_draw, match.prob_away = (
+                probs["prob_home"], probs["prob_draw"], probs["prob_away"],
+            )
+            match.prob_updated_at = now
+            updated += 1
+        await db.commit()
+    logger.info(
+        "Probabilidades actualizadas en %d de %d partidos próximos (%d fallos).", updated, len(stale), failed
+    )
+
+
+async def sync_win_probabilities(force: bool = False):
+    """Probabilidad de victoria del próximo partido de cada equipo (API-Football
+    `/predictions`). Cada SYNC_PROBABILITIES_HOURS y al arrancar (solo lo que falte);
+    forzable con POST /matches/sync-probabilities (admin)."""
+    logger.info("Starting win probabilities sync...")
+    await _retry(lambda: _do_sync_win_probabilities(force=force), "sync_win_probabilities")
+
+
 async def _do_sync_first_goals():
     """Eventos (`/fixtures/events`) de los partidos EN VIVO o finalizados con algo
     pendiente; una petición por partido y corrida:
@@ -527,8 +604,11 @@ async def start_scheduler():
     # Plantillas: tras los fixtures (necesita los ids de equipo), refresco diario; si
     # el último sync es reciente, la primera corrida espera a su vencimiento.
     scheduler.add_job(sync_players,             IntervalTrigger(hours=settings.SYNC_SQUADS_HOURS),       id="sync_players",    replace_existing=True, next_run_time=await _squads_next_run())
+    # Probabilidad de victoria del próximo partido de cada equipo: tras los fixtures;
+    # solo pide lo que falte o esté vencido (un reinicio no gasta cuota).
+    scheduler.add_job(sync_win_probabilities,   IntervalTrigger(hours=settings.SYNC_PROBABILITIES_HOURS), id="sync_probabilities", replace_existing=True, next_run_time=now + timedelta(seconds=45))
     scheduler.start()
-    logger.info("Scheduler started with 5 jobs.")
+    logger.info("Scheduler started with 6 jobs.")
 
 
 def stop_scheduler():

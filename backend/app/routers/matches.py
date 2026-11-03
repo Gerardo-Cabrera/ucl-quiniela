@@ -7,7 +7,9 @@ from app.schemas import MatchOut, PlayerOut
 from app.core.deps import get_current_user, get_admin_user
 from app.core.rate_limit import limiter
 from app.config import settings
-from app.services.scheduler import sync_ucl_fixtures, sync_players, players_sync_in_progress
+from app.services.scheduler import (
+    sync_ucl_fixtures, sync_players, players_sync_in_progress, sync_win_probabilities,
+)
 from app.services.prediction_window import annotate_predictable
 from app.crud import match_crud, player_crud
 
@@ -84,3 +86,18 @@ async def force_sync_squads(
         raise HTTPException(status_code=409, detail="Ya hay una sincronización de plantillas en curso.")
     background_tasks.add_task(sync_players)
     return {"message": "Sincronización de plantillas iniciada."}
+
+
+@router.post("/sync-probabilities", status_code=202, summary="Admin: Forzar sync de probabilidades")
+@limiter.limit(settings.RATE_LIMIT_SYNC)
+async def force_sync_probabilities(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    force: bool = False,
+    _: User = Depends(get_admin_user),
+):
+    """Actualiza en background la probabilidad de victoria del próximo partido de cada
+    equipo (una petición por partido, espaciadas). Por defecto solo pide las vencidas
+    (SYNC_PROBABILITIES_HOURS); con `?force=true` las pide todas."""
+    background_tasks.add_task(sync_win_probabilities, force)
+    return {"message": "Sincronización de probabilidades iniciada."}

@@ -200,7 +200,7 @@ async def test_retry_stops_on_auth_error():
 
 async def _add_match(
     api_fixture_id: int, home_id: int, away_id: int, *,
-    status: MatchStatus, phase: MatchPhase = MatchPhase.LEAGUE,
+    status: MatchStatus, phase: MatchPhase = MatchPhase.LEAGUE, days_ahead: float = 1,
 ) -> None:
     async with TestSessionLocal() as session:
         session.add(Match(
@@ -208,9 +208,71 @@ async def _add_match(
             home_team=f"T{home_id}", away_team=f"T{away_id}",
             home_team_api_id=home_id, away_team_api_id=away_id,
             phase=phase, status=status,
-            match_date=datetime.now(timezone.utc) + timedelta(days=1),
+            match_date=datetime.now(timezone.utc) + timedelta(days=days_ahead),
         ))
         await session.commit()
+
+
+# ── PROBABILIDAD DE VICTORIA (próximo partido de cada equipo) ─────────────────
+
+_PROBS = [{"predictions": {"percent": {"home": "50%", "draw": "30%", "away": "20%"}}}]
+
+
+async def _fixture_ids_of(match_ids: set[int]) -> set[int]:
+    async with TestSessionLocal() as session:
+        rows = (await session.execute(select(Match.id, Match.api_fixture_id))).all()
+    return {fid for mid, fid in rows if mid in match_ids}
+
+
+@pytest.mark.asyncio
+async def test_next_match_ids_per_team_picks_earliest_within_lookahead():
+    """Por equipo, su primer partido programado con kickoff futuro dentro del horizonte:
+    un partido posterior del mismo equipo cuenta solo si es el próximo de su rival."""
+    await _add_match(1, 541, 529, status=MatchStatus.SCHEDULED, days_ahead=2)    # próximo de 541 y 529
+    await _add_match(2, 541, 50, status=MatchStatus.SCHEDULED, days_ahead=5)     # 541 ya tiene; próximo de 50
+    await _add_match(3, 33, 85, status=MatchStatus.SCHEDULED, days_ahead=20)     # fuera del horizonte
+    await _add_match(4, 529, 33, status=MatchStatus.FINISHED, days_ahead=-1)     # pasado
+
+    ids = await scheduler_module._next_match_ids_per_team(datetime.now(timezone.utc), timedelta(days=7))
+    assert await _fixture_ids_of(ids) == {1, 2}
+
+
+@pytest.mark.asyncio
+async def test_sync_win_probabilities_fetches_only_stale(monkeypatch):
+    """Pide solo las probabilidades que faltan o están vencidas (un reinicio no gasta
+    cuota); un fixture que falla se conserva sin dato y se reintenta en la siguiente
+    corrida; `force` las pide todas."""
+    monkeypatch.setattr(scheduler_module.settings, "API_REQUESTS_PER_MINUTE", 60_000)
+    await _add_match(1, 541, 529, status=MatchStatus.SCHEDULED, days_ahead=2)
+    await _add_match(2, 50, 33, status=MatchStatus.SCHEDULED, days_ahead=3)
+    calls: list[int] = []
+    failing = {2}
+
+    async def fake_fetch(fixture_id: int) -> list[dict]:
+        calls.append(fixture_id)
+        if fixture_id in failing:
+            raise RuntimeError("boom")
+        return _PROBS
+
+    monkeypatch.setattr(ucl_api, "fetch_win_probability", fake_fetch)
+
+    await scheduler_module._do_sync_win_probabilities()
+    assert sorted(calls) == [1, 2]
+    async with TestSessionLocal() as session:
+        rows = dict((await session.execute(select(Match.api_fixture_id, Match.prob_home))).all())
+    assert rows == {1: 50, 2: None}
+
+    # Segunda corrida: el 1 está fresco; el 2 (sin dato) se reintenta y ahora responde.
+    calls.clear(); failing.clear()
+    await scheduler_module._do_sync_win_probabilities()
+    assert calls == [2]
+
+    # Todo fresco: sin peticiones. Con force: todas.
+    calls.clear()
+    await scheduler_module._do_sync_win_probabilities()
+    assert calls == []
+    await scheduler_module._do_sync_win_probabilities(force=True)
+    assert sorted(calls) == [1, 2]
 
 
 @pytest.mark.asyncio
