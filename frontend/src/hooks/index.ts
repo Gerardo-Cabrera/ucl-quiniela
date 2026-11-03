@@ -133,6 +133,20 @@ export const useDeletePrediction = () => {
   });
 };
 
+// Admin: backfill. Puede puntuar al instante partidos ya finalizados, así que se
+// refrescan las vistas derivadas (pronósticos, tabla, jornadas y aciertos). El error
+// se muestra inline en la vista (sin toast).
+export const useBackfill = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: predictionsApi.backfill,
+    onSuccess: () => {
+      ["predictions", "leaderboard", "matchdays", "stats"].forEach((key) =>
+        qc.invalidateQueries({ queryKey: [key] }));
+    },
+  });
+};
+
 // Interruptor admin de prórroga de pronósticos (solo se consulta si es admin).
 export const usePredictionOverride = (enabled: boolean) =>
   useQuery({

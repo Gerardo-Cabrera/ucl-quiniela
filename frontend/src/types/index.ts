@@ -10,6 +10,11 @@ export type MatchPhase =
 
 export type MatchStatus = "scheduled" | "live" | "finished" | "postponed";
 
+/** Fases en orden cronológico (filtros de Partidos y selector del backfill). */
+export const MATCH_PHASES: MatchPhase[] = [
+  "league", "knockout_playoffs", "round_of_16", "quarter_finals", "semi_finals", "final",
+];
+
 // ── MODELS ────────────────────────────────────────────────────────────────────
 
 export interface User {
@@ -207,3 +212,19 @@ export interface MatchdaysSummary {
   round_mvp_ranking: MvpRankEntry[];
 }
 
+// ── BACKFILL (admin) ────────────────────────────────────────────────────────────
+
+/** La vista envía ids (partido y goleador elegidos de listas): sin ambigüedad de
+ *  nombres. La vía API admite además el partido por par de equipos y el goleador por
+ *  nombre (ver backend). */
+export interface BackfillItem {
+  match_id: number;
+  predicted_home: number;
+  predicted_away: number;
+  first_goal_player_id?: number;
+}
+
+export interface BackfillPayload {
+  team_name: string;
+  predictions: BackfillItem[];
+}

@@ -1,7 +1,7 @@
 import apiClient from "@/api/client";
 import type {
   Match, Prediction, PredictionOverride, LeaderboardEntry, Top8Pick, Player,
-  TournamentPick, TournamentStats, StatsSummary, MatchdaysSummary,
+  TournamentPick, TournamentStats, StatsSummary, MatchdaysSummary, BackfillPayload,
 } from "@/types";
 
 // ── MATCHES ───────────────────────────────────────────────────────────────────
@@ -42,6 +42,11 @@ export const predictionsApi = {
   },
   getOverride: async (): Promise<PredictionOverride> => {
     const { data } = await apiClient.get("/api/predictions/override");
+    return data;
+  },
+  // Admin: carga pronósticos de un participante (sin validar plazo; ver backend).
+  backfill: async (payload: BackfillPayload): Promise<Prediction[]> => {
+    const { data } = await apiClient.post("/api/predictions/admin/backfill", payload);
     return data;
   },
   setOverride: async (enabled: boolean): Promise<PredictionOverride> => {

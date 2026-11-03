@@ -6,12 +6,10 @@ import { MatchCard } from "@/components/MatchCard";
 import { PredictionModal } from "@/components/PredictionModal";
 import { Spinner, EmptyState, DayHeader, Pills } from "@/components/ui";
 import { groupByDay } from "@/lib/date";
-import type { Match, MatchPhase, MatchStatus } from "@/types";
+import { MATCH_PHASES, type Match, type MatchPhase, type MatchStatus } from "@/types";
 import { clsx } from "clsx";
 
-const PHASES: (MatchPhase | "all")[] = [
-  "all", "league", "knockout_playoffs", "round_of_16", "quarter_finals", "semi_finals", "final",
-];
+const PHASES: (MatchPhase | "all")[] = ["all", ...MATCH_PHASES];
 
 const STATUSES: (MatchStatus | "all")[] = ["all", "scheduled", "live", "finished"];
 
