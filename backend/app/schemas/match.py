@@ -17,6 +17,9 @@ class MatchOut(BaseModel):
     penalty_away: Optional[int]
     elapsed: Optional[int]
     elapsed_extra: Optional[int] = None   # descuento en curso: "90+3"
+    # status.short de la API: en vivo, la tarjeta muestra "Descanso" (HT), la pausa de la
+    # prórroga (BT), "Penales" (P) o suspendido/interrumpido en vez del minuto.
+    api_status: Optional[str] = None
     first_goal_team: Optional[str]
     first_goal_player: Optional[str]
     # id del goleador real: la tarjeta marca el acierto del primer gol por id (como el scoring).

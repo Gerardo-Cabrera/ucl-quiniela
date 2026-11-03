@@ -47,6 +47,12 @@ class Match(Base):
     # Minutos de descuento en curso (status.extra): con elapsed 45/90 la tarjeta muestra
     # "45+2" / "90+3". En la prórroga elapsed sigue contando (91-120) y extra vuelve a None.
     elapsed_extra: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # status.short de API-Football tal cual (1H, HT, 2H, ET, BT, P, FT, AET, PEN, PST,
+    # SUSP…). `status` lo resume en 4 estados; este detalle lo usa la tarjeta en vivo para
+    # mostrar "Descanso" (HT), la pausa de la prórroga (BT), la tanda de penales (P) o un
+    # partido suspendido/interrumpido en lugar de un minuto colgado (en HT la API deja
+    # elapsed=45 hasta la reanudación).
+    api_status: Mapped[str | None] = mapped_column(String(8), nullable=True)
     # Primer gol del partido (resuelto por el job de eventos). `first_goal_team`
     # se conserva para mostrarlo; `first_goal_player_id`/`first_goal_player` son el
     # goleador real (el id es contra lo que se puntúa el pronóstico).

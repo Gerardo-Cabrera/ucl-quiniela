@@ -65,18 +65,29 @@ def _resolve_phase(raw_round: str) -> MatchPhase | None:
         return MatchPhase.LEAGUE
     return ROUND_MAP.get(raw_round)
 
-# Mapeo de status de API-Football → MatchStatus interna
+# Mapeo de status.short de API-Football → MatchStatus interna. El código crudo se
+# guarda además en `Match.api_status` (la tarjeta distingue descanso, pausa de la
+# prórroga, tanda de penales, suspendido…). Un código desconocido cae en SCHEDULED.
 STATUS_MAP = {
-    "NS":  MatchStatus.SCHEDULED,   # Not Started
-    "1H":  MatchStatus.LIVE,
-    "HT":  MatchStatus.LIVE,
-    "2H":  MatchStatus.LIVE,
-    "ET":  MatchStatus.LIVE,
-    "P":   MatchStatus.LIVE,
-    "FT":  MatchStatus.FINISHED,
-    "AET": MatchStatus.FINISHED,
-    "PEN": MatchStatus.FINISHED,
-    "PST": MatchStatus.POSTPONED,
+    "NS":   MatchStatus.SCHEDULED,  # Not Started
+    "TBD":  MatchStatus.SCHEDULED,  # hora por confirmar
+    "1H":   MatchStatus.LIVE,
+    "HT":   MatchStatus.LIVE,       # descanso (elapsed se queda en 45)
+    "2H":   MatchStatus.LIVE,
+    "ET":   MatchStatus.LIVE,       # prórroga
+    "BT":   MatchStatus.LIVE,       # descanso de la prórroga (elapsed en 105)
+    "P":    MatchStatus.LIVE,       # tanda de penales en curso
+    "SUSP": MatchStatus.LIVE,       # suspendido con el partido empezado (se reanuda)
+    "INT":  MatchStatus.LIVE,       # interrumpido (se reanuda)
+    "LIVE": MatchStatus.LIVE,       # en juego, sin detalle de periodo
+    "FT":   MatchStatus.FINISHED,
+    "AET":  MatchStatus.FINISHED,
+    "PEN":  MatchStatus.FINISHED,
+    "PST":  MatchStatus.POSTPONED,
+    "CANC": MatchStatus.POSTPONED,  # cancelado
+    "ABD":  MatchStatus.POSTPONED,  # abandonado (suele reprogramarse)
+    "AWD":  MatchStatus.POSTPONED,  # resultado técnico, sin juego
+    "WO":   MatchStatus.POSTPONED,  # walkover
 }
 
 
@@ -292,6 +303,7 @@ def parse_fixture(fixture_data: dict) -> dict | None:
         "penalty_away":     penalty.get("away"),
         "elapsed":          f["status"].get("elapsed"),
         "elapsed_extra":    f["status"].get("extra"),   # descuento en curso ("90+3")
+        "api_status":       raw_status,                 # detalle: HT, BT, P, SUSP…
         "round_number":     _round_number(raw_round),
         "phase":            phase,
         "status":           status,

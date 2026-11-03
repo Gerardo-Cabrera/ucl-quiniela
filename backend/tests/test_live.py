@@ -38,6 +38,30 @@ def test_parse_elapsed_live():
     assert parsed["penalty_home"] is None
 
 
+def test_parse_half_time_is_live_with_api_status():
+    """En el descanso la API deja elapsed=45 con status HT: el partido sigue LIVE y el
+    código crudo viaja en api_status (la tarjeta muestra "Descanso", no un 45′ colgado)."""
+    parsed = ucl_api.parse_fixture(_fixture(status="HT", elapsed=45))
+    assert (parsed["status"], parsed["api_status"], parsed["elapsed"]) == (MatchStatus.LIVE, "HT", 45)
+    # Reanudado: vuelve el minuto.
+    assert ucl_api.parse_fixture(_fixture(status="2H", elapsed=52))["api_status"] == "2H"
+
+
+@pytest.mark.parametrize("status", ["BT", "P", "SUSP", "INT", "LIVE"])
+def test_parse_other_in_play_pauses_are_live(status):
+    """Pausa de la prórroga, tanda de penales, suspendido, interrumpido o 'LIVE' genérico:
+    el partido está en juego (antes caían en SCHEDULED y la tarjeta mostraba 'VS')."""
+    parsed = ucl_api.parse_fixture(_fixture(status=status, round_="Final", elapsed=105))
+    assert (parsed["status"], parsed["api_status"]) == (MatchStatus.LIVE, status)
+
+
+@pytest.mark.parametrize("status", ["CANC", "ABD", "AWD", "WO"])
+def test_parse_not_played_statuses_are_postponed(status):
+    """Cancelado, abandonado, resultado técnico o walkover: no se juega (POSTPONED), no
+    'programado'."""
+    assert ucl_api.parse_fixture(_fixture(status=status, elapsed=None))["status"] == MatchStatus.POSTPONED
+
+
 def test_parse_round_number():
     """La jornada de la fase de liga sale de la ronda 'League Stage - N'; las
     eliminatorias no tienen número (se agrupan por fase)."""
@@ -168,6 +192,7 @@ async def test_sync_fixtures_reports_newly_finished(monkeypatch):
         m = await session.get(Match, match_id)
         assert m.status == MatchStatus.FINISHED
         assert m.home_score == 2 and m.away_score == 1
+        assert m.api_status == "FT"   # el detalle de la API se persiste con el upsert
 
 
 @pytest.mark.asyncio
