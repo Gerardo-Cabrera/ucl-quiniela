@@ -5,6 +5,7 @@ Los hashes que passlib dejó en la BD ($2b$12$...) deben seguir verificando igua
 import pytest
 from httpx import AsyncClient
 
+from app.config import settings
 from app.core.security import hash_password, verify_password
 from app.models.user import User
 from tests.conftest import TestSessionLocal
@@ -15,7 +16,7 @@ PASSLIB_HASH = "$2b$12$6rH0cjKvlImBzt4F4.bCouA//SjDCxWZkVFUWIsDuLk9oViUnoaoq"
 
 def test_roundtrip():
     h = hash_password("secreto123")
-    assert h.startswith("$2b$12$")   # mismo formato y coste que passlib
+    assert h.startswith(f"$2b${settings.BCRYPT_ROUNDS:02d}$")   # formato de passlib; coste configurable
     assert verify_password("secreto123", h) is True
     assert verify_password("secreto124", h) is False
 

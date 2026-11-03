@@ -18,8 +18,9 @@ def _secret(password: str) -> bytes:
 
 
 def hash_password(password: str) -> str:
-    # gensalt(): 12 rondas, prefijo $2b$ (los mismos valores por defecto que passlib).
-    return bcrypt.hashpw(_secret(password), bcrypt.gensalt()).decode("ascii")
+    # Prefijo $2b$ y, por defecto, 12 rondas (los mismos valores que usaba passlib);
+    # el coste se ajusta con BCRYPT_ROUNDS (los tests lo bajan).
+    return bcrypt.hashpw(_secret(password), bcrypt.gensalt(rounds=settings.BCRYPT_ROUNDS)).decode("ascii")
 
 
 def verify_password(plain: str, hashed: str) -> bool:

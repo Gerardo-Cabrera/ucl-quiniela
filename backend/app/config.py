@@ -14,6 +14,12 @@ class Settings(BaseSettings):
     SECRET_KEY: str = INSECURE_SECRET_KEY
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 10080  # 7 días
+    # Coste de bcrypt (2^n iteraciones): 12 en producción (~200 ms por hash, lo que frena
+    # la fuerza bruta). Los tests lo bajan a 4 (~1 ms) por variable de entorno: cada
+    # registro/login de la suite hashea y con 12 la suite tardaba más de un minuto. El
+    # coste viaja dentro de cada hash, así que verificar hashes antiguos no depende de
+    # este valor.
+    BCRYPT_ROUNDS: int = Field(default=12, ge=4, le=31)
 
     # API-Football: hay dos formas de acceder a la MISMA API con distinta
     # autenticación (RapidAPI o api-sports directo). Lo ÚNICO que hay que
@@ -69,9 +75,12 @@ class Settings(BaseSettings):
     # descartarla: sin esto APScheduler la omite si el tick no dispara en 1 s.
     JOB_MISFIRE_GRACE_SECONDS: int = 3600
 
-    # Rate limiting
+    # Rate limiting. El límite es POR IP y varios participantes pueden compartirla (la
+    # misma wifi en una reunión, el CGNAT de un operador móvil): con el refresco de un
+    # minuto de las vistas y los cambios de pantalla en una jornada, 60/min se quedaba
+    # justo para un grupo; 120/min sigue frenando el abuso sin molestar al uso legítimo.
     RATE_LIMIT_ENABLED: bool = True
-    RATE_LIMIT_DEFAULT: str = "60/minute"
+    RATE_LIMIT_DEFAULT: str = "120/minute"
     # Límite más estricto para /auth/* (login y registro): frena ataques de
     # fuerza bruta de credenciales sin molestar al uso legítimo.
     RATE_LIMIT_AUTH: str = "10/minute"
