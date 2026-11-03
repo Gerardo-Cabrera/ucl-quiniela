@@ -262,7 +262,12 @@
     "live": "En Vivo",
     "finished": "Finalizado",
     "postponed": "Pospuesto",
-    "liveBadge": "EN VIVO"
+    "liveBadge": "EN VIVO",
+    "halfTime": "Descanso",
+    "extraTimeBreak": "Descanso · prórroga",
+    "penaltyShootout": "Penales",
+    "suspended": "Suspendido",
+    "interrupted": "Interrumpido"
   },
   "backfill": {
     "title": "Backfill",
