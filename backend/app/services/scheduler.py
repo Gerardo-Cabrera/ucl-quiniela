@@ -580,6 +580,14 @@ async def _do_calculate_top8():
     logger.info("Top 8 puntuado automáticamente al terminar la fase de liga: %s → %s", actual_top8, summary)
 
 
+async def score_pending_predictions_now() -> None:
+    """Puntúa UNA vez las predicciones pendientes de partidos finalizados: solo consultas
+    locales (milisegundos), sin red, sin reintentos ni esperas. Para llamarla desde un
+    request (backfill admin) sin atar su tiempo de respuesta a la API ni al scheduler.
+    Lo que no pueda puntuarse (primer gol aún sin resolver) lo recogen los jobs."""
+    await _do_calculate_points()
+
+
 async def calculate_pending_points():
     """Calcula puntos de predicciones de partidos finalizados. Se ejecuta cada 30 minutos.
     Después comprueba el Top 8, que solo aplica una vez: al terminar la fase de liga."""
