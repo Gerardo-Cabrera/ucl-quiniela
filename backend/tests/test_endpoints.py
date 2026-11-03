@@ -1101,9 +1101,35 @@ async def test_backfill_loads_finished_match_without_date_check(admin_client: As
 
 
 @pytest.mark.asyncio
-async def test_backfill_finished_match_scores_immediately(admin_client: AsyncClient, monkeypatch):
-    """Con el partido finalizado y marcador, dispara primer gol → puntos y devuelve la
-    predicción YA puntuada (liga: exacto 8 + victoria 5 + primer gol 3 = 16)."""
+async def test_backfill_finished_match_scores_in_request_without_network(admin_client: AsyncClient, monkeypatch):
+    """Caso normal (primer gol ya resuelto): la respuesta llega YA puntuada (liga: exacto 8
+    + victoria 5 + primer gol 3 = 16) solo con consultas locales, sin tocar la API."""
+    match_id = await _create_match(status=MatchStatus.FINISHED, home_score=2, away_score=1,
+                                   first_goal_team="Real Madrid", first_goal_player_id=10,
+                                   first_goal_player="Vinicius Jr", goal_events=[],
+                                   match_date=datetime.now(timezone.utc) - timedelta(hours=2))
+    calls: list[int] = []
+
+    async def fake_events(fixture_id: int) -> list[dict]:
+        calls.append(fixture_id)
+        return []
+
+    monkeypatch.setattr(ucl_api, "fetch_fixture_events", fake_events)
+    resp = await admin_client.post(BACKFILL, json={
+        "team_name": "Jax FC",
+        "predictions": [{"match_id": match_id, "predicted_home": 2, "predicted_away": 1, "first_goal_player_id": 10}],
+    })
+    assert resp.status_code == 201
+    pred = resp.json()[0]
+    assert (pred["is_calculated"], pred["points_earned"], pred["first_goal_points"]) == (True, 16, 3)
+    assert calls == []   # nada de red dentro del request
+
+
+@pytest.mark.asyncio
+async def test_backfill_unresolved_first_goal_scores_in_background(admin_client: AsyncClient, monkeypatch):
+    """Primer gol aún sin resolver: la respuesta vuelve pendiente (sin esperar a la API) y
+    el pipeline completo corre tras responder (con ASGITransport, antes de devolver al
+    test): al consultar, la predicción ya está puntuada y el primer gol resuelto."""
     match_id = await _create_match(status=MatchStatus.FINISHED, home_score=2, away_score=1,
                                    match_date=datetime.now(timezone.utc) - timedelta(hours=2))
 
@@ -1116,9 +1142,11 @@ async def test_backfill_finished_match_scores_immediately(admin_client: AsyncCli
         "predictions": [{"match_id": match_id, "predicted_home": 2, "predicted_away": 1, "first_goal_player_id": 10}],
     })
     assert resp.status_code == 201
-    pred = resp.json()[0]
-    assert (pred["is_calculated"], pred["points_earned"], pred["first_goal_points"]) == (True, 16, 3)
-    assert pred["match"]["first_goal_player"] == "Vinicius Jr"
+    assert resp.json()[0]["is_calculated"] is False
+
+    mine = (await admin_client.get("/api/predictions/")).json()[0]
+    assert (mine["is_calculated"], mine["points_earned"], mine["first_goal_points"]) == (True, 16, 3)
+    assert mine["match"]["first_goal_player"] == "Vinicius Jr"
 
 
 @pytest.mark.asyncio

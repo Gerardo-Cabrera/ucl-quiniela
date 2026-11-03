@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException
+import logging
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database import get_db
@@ -12,8 +13,11 @@ from app.schemas import (
 from app.core.deps import get_current_user, get_admin_user
 from app.crud import prediction_crud, match_crud, player_crud, app_state_crud, user_crud
 from app.services.prediction_window import ensure_predictable, annotate_predictable
-from app.services.scheduler import sync_first_goals, calculate_pending_points
+from app.services.scheduler import (
+    sync_first_goals, calculate_pending_points, score_pending_predictions_now,
+)
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/predictions", tags=["Predictions"])
 
 _TOURNAMENT_TZ = settings.tournament_tz
@@ -186,6 +190,7 @@ async def _resolve_first_goal(
 )
 async def backfill_predictions(
     data: PredictionBackfillRequest,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     _: User = Depends(get_admin_user),
 ):
@@ -193,9 +198,15 @@ async def backfill_predictions(
     (papel, WhatsApp). A diferencia del POST del usuario NO valida el plazo de la
     jornada ni el estado del partido (por eso es admin): sirve para partidos ya
     jugados. Upsert por (usuario, partido): reenviar corrige, no duplica. Atómico: un
-    item inválido (404/400) no carga ninguno. Si algún partido ya FINALIZÓ, corre el
-    mismo pipeline del scheduler (primer gol → puntos) para puntuarlo al instante, sin
-    esperar al timer de respaldo."""
+    item inválido (404/400) no carga ninguno.
+
+    Si algún partido ya FINALIZÓ se puntúa al instante **solo con consultas locales**
+    (milisegundos): basta cuando el primer gol ya está resuelto, que es el caso normal
+    horas después del partido. Lo que quede pendiente (primer gol sin resolver) se
+    encola en background con el pipeline completo del scheduler (eventos → puntos).
+    Nada de red dentro del request: antes se ejecutaba aquí el pipeline entero y, con la
+    API lenta en plena jornada, la respuesta superaba el tiempo máximo del proxy; el
+    navegador recibía un error de conexión aunque los pronósticos ya estaban guardados."""
     user = await user_crud.get_by_team_name(db, data.team_name)
     if not user:
         raise HTTPException(status_code=404, detail=f"Participante '{data.team_name}' no encontrado.")
@@ -219,14 +230,19 @@ async def backfill_predictions(
         ))
 
     if any_finished:
-        # Los jobs abren su propia sesión y solo ven lo confirmado: commit antes. Mismo
-        # orden que el scheduler (primer gol → puntos); ambos van envueltos en _retry.
+        # El cálculo abre su propia sesión y solo ve lo confirmado: commit antes.
         await db.commit()
-        await sync_first_goals()
-        await calculate_pending_points()
-        # Devolver el estado ya puntuado (los jobs escribieron en otra sesión).
+        try:
+            await score_pending_predictions_now()
+        except Exception:   # ya está guardado: no convertir un fallo de puntuación en un 5xx
+            logger.exception("Backfill: fallo puntuando al instante; lo hará el job periódico.")
+        # Devolver el estado ya puntuado (se escribió en otra sesión).
         for pred in saved:
             await db.refresh(pred)
             await db.refresh(pred.match)
+        if any(not p.is_calculated and p.match.status == MatchStatus.FINISHED for p in saved):
+            # Primer gol aún sin resolver: pipeline completo (con red) tras responder.
+            background_tasks.add_task(sync_first_goals)
+            background_tasks.add_task(calculate_pending_points)
     await annotate_predictable(db, [p.match for p in saved], _TOURNAMENT_TZ)
     return saved
