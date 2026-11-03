@@ -17,6 +17,10 @@ const STARS = Array.from({ length: 20 }, () => ({
   animationDelay: `${Math.random() * 3}s`,
 }));
 
+// Identificadores (email, alias, equipo): sin autocapitalizar ni autocorregir, que es
+// lo que los teclados móviles hacen por defecto y convertía "juan@…" en "Juan@…".
+const PLAIN: InputHTMLAttributes<HTMLInputElement> = { autoCapitalize: "none", autoCorrect: "off", spellCheck: false };
+
 export default function LoginPage() {
   const { t } = useTranslation();
   const [mode, setMode]           = useState<Mode>("login");
@@ -90,10 +94,6 @@ export default function LoginPage() {
       {hint && <p className="text-xs text-ucl-silver/50 mt-1.5">{hint}</p>}
     </div>
   );
-
-  // Identificadores (email, alias, equipo): sin autocapitalizar ni autocorregir, que es
-  // lo que los teclados móviles hacen por defecto y convertía "juan@…" en "Juan@…".
-  const PLAIN: InputHTMLAttributes<HTMLInputElement> = { autoCapitalize: "none", autoCorrect: "off", spellCheck: false };
 
   return (
     <div className="min-h-screen ucl-stars-bg flex items-center justify-center p-4">
