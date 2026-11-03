@@ -76,18 +76,23 @@ async def update_profile(
     current_user: User = Depends(get_current_user),
 ):
     """Actualiza el perfil del usuario autenticado: nombre de equipo y/o alias.
-    El equipo solo se cambia si se envía (obligatorio, no se puede vaciar); el alias
-    en blanco lo quita. Rechaza (409) si el equipo o el alias ya lo usa otro usuario."""
+    Solo cambia lo que viene en el body: el equipo, si se envía (obligatorio, no se
+    puede vaciar); el alias, si se envía (null o en blanco lo quitan; ausente se
+    conserva). Rechaza (409) si el equipo o el alias ya lo usa otro usuario."""
     if data.team_name is not None:
         owner = await user_crud.get_by_team_name(db, data.team_name)
         if owner and owner.id != current_user.id:
             raise HTTPException(status_code=409, detail="Ese nombre de equipo ya está en uso.")
         current_user.team_name = data.team_name
-    if data.alias is not None:
-        owner = await user_crud.get_by_alias(db, data.alias)
-        if owner and owner.id != current_user.id:
-            raise HTTPException(status_code=409, detail="Ese alias ya está en uso.")
-    current_user.alias = data.alias
+    # "alias" en model_fields_set = vino en el body (aunque sea null o "", que el
+    # validador normaliza a None). Ausente → se conserva. Antes la asignación quedaba
+    # fuera del `if` y un PATCH con solo team_name borraba el alias.
+    if "alias" in data.model_fields_set:
+        if data.alias is not None:
+            owner = await user_crud.get_by_alias(db, data.alias)
+            if owner and owner.id != current_user.id:
+                raise HTTPException(status_code=409, detail="Ese alias ya está en uso.")
+        current_user.alias = data.alias
     await db.flush()
     return current_user
 
