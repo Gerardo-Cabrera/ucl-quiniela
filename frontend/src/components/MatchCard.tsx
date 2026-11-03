@@ -13,7 +13,16 @@ interface MatchCardProps {
   match: Match;
   prediction?: Prediction;
   onPredict?: (match: Match) => void;
+  /** Reservar el hueco de la barra de probabilidad / del primer gol real aunque este
+   *  partido no los tenga: la cuadrícula lo pide cuando otra tarjeta del mismo día sí
+   *  los muestra, para que todas mantengan cada bloque al mismo nivel. */
+  reserveProbability?: boolean;
+  reserveFirstGoal?: boolean;
 }
+
+// Nombre de equipo: dos líneas reservadas (y como máximo) para que la fila de equipos
+// mida lo mismo en todas las tarjetas, tenga el nombre una o dos líneas.
+const TEAM_NAME_CLS = "text-sm text-center font-medium leading-tight min-h-[2.25rem] line-clamp-2";
 
 // Pausas que la API marca con su propio status.short: en ellas el minuto se queda fijo
 // (45 en el descanso, 105 en el de la prórroga, 120 en los penales), así que se muestra
@@ -36,7 +45,7 @@ function liveClock(match: Match, t: TFunction): string | null {
   return `${match.elapsed}${match.elapsed_extra ? `+${match.elapsed_extra}` : ""}′`;
 }
 
-export function MatchCard({ match, prediction, onPredict }: MatchCardProps) {
+export function MatchCard({ match, prediction, onPredict, reserveProbability, reserveFirstGoal }: MatchCardProps) {
   const { t } = useTranslation();
   const isFinished  = match.status === "finished";
   const canPredict  = match.predictable;   // plazo de jornada + prórroga (backend)
@@ -69,7 +78,7 @@ export function MatchCard({ match, prediction, onPredict }: MatchCardProps) {
         {/* Home */}
         <div className="flex-1 flex flex-col items-center gap-2">
           <TeamLogo src={match.home_team_logo} alt={match.home_team} className="w-10 h-10 text-lg" />
-          <span className="text-sm text-center font-medium leading-tight">{match.home_team}</span>
+          <span className={TEAM_NAME_CLS} title={match.home_team}>{match.home_team}</span>
         </div>
 
         {/* Score / VS */}
@@ -101,19 +110,23 @@ export function MatchCard({ match, prediction, onPredict }: MatchCardProps) {
         {/* Away */}
         <div className="flex-1 flex flex-col items-center gap-2">
           <TeamLogo src={match.away_team_logo} alt={match.away_team} className="w-10 h-10 text-lg" />
-          <span className="text-sm text-center font-medium leading-tight">{match.away_team}</span>
+          <span className={TEAM_NAME_CLS} title={match.away_team}>{match.away_team}</span>
         </div>
       </div>
 
       {/* Probabilidad de victoria pre-partido (solo el próximo partido de cada equipo). */}
-      <WinProbabilityBar match={match} />
+      <WinProbabilityBar match={match} placeholder={reserveProbability} />
 
       {/* Primer goleador real: en cuanto se conoce (en vivo o finalizado), para todos,
-          tengan o no pronóstico. */}
-      {match.first_goal_player && (
-        <div className="-mt-2 mb-4 flex items-center justify-center gap-1.5 text-xs">
+          tengan o no pronóstico. Sin dato pero con `reserveFirstGoal`, el hueco se
+          conserva invisible (p. ej. un 0-0 junto a partidos con gol). */}
+      {(match.first_goal_player || reserveFirstGoal) && (
+        <div
+          className={clsx("-mt-2 mb-4 flex items-center justify-center gap-1.5 text-xs", !match.first_goal_player && "invisible")}
+          aria-hidden={!match.first_goal_player}
+        >
           <span className="text-ucl-silver/50">⚽ {t("common.firstGoalReal")}:</span>
-          <span className="font-medium text-ucl-white">{match.first_goal_player}</span>
+          <span className="font-medium text-ucl-white">{match.first_goal_player ?? "—"}</span>
         </div>
       )}
 

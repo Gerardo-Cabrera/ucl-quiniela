@@ -107,21 +107,30 @@ export default function MatchesPage() {
       ) : (
         <div className="space-y-6">
           {/* Finalizados: del más reciente al más antiguo; el resto, cronológico. */}
-          {groupByDay(matches, (m) => m.match_date, status === "finished" ? "desc" : "asc").map((group) => (
-            <section key={group.day}>
-              <DayHeader date={group.date} />
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-                {group.items.map((match) => (
-                  <MatchCard
-                    key={match.id}
-                    match={match}
-                    prediction={predictionByMatch[match.id]}
-                    onPredict={setSelected}
-                  />
-                ))}
-              </div>
-            </section>
-          ))}
+          {groupByDay(matches, (m) => m.match_date, status === "finished" ? "desc" : "asc").map((group) => {
+            // Uniformidad por fila: si algún partido del día muestra la barra de
+            // probabilidad o el primer gol real, los demás reservan ese hueco para que
+            // cada bloque (y el pie) quede al mismo nivel en toda la cuadrícula.
+            const reserveProbability = group.items.some((m) => m.predictable && m.prob_home != null);
+            const reserveFirstGoal = group.items.some((m) => m.first_goal_player);
+            return (
+              <section key={group.day}>
+                <DayHeader date={group.date} />
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+                  {group.items.map((match) => (
+                    <MatchCard
+                      key={match.id}
+                      match={match}
+                      prediction={predictionByMatch[match.id]}
+                      onPredict={setSelected}
+                      reserveProbability={reserveProbability}
+                      reserveFirstGoal={reserveFirstGoal}
+                    />
+                  ))}
+                </div>
+              </section>
+            );
+          })}
         </div>
       )}
 
