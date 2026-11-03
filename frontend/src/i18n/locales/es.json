@@ -114,7 +114,7 @@
     }
   },
   "probability": {
-    "label": "Probabilidad",
+    "win": "Victoria",
     "draw": "Empate",
     "title": "Probabilidad de victoria (local · empate · visitante) según API-Football, actualizada el {{date}}"
   },
