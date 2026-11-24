@@ -6,7 +6,7 @@ from app.schemas.prediction import (  # noqa: F401
 )
 from app.schemas.top8 import Top8PickItem, Top8PicksCreate, Top8PickOut, Top8CalculateRequest  # noqa: F401
 from app.schemas.leaderboard import LeaderboardEntry  # noqa: F401
-from app.schemas.player import PlayerOut  # noqa: F401
+from app.schemas.player import PlayerOut, PlayerFormOut, MatchPlayerOut  # noqa: F401
 
 __all__ = [
     "UserCreate", "UserLogin", "UserOut", "Token", "PasswordChange", "PasswordReset", "ProfileUpdate",
@@ -15,5 +15,5 @@ __all__ = [
     "PredictionBackfillItem", "PredictionBackfillRequest",
     "Top8PickItem", "Top8PicksCreate", "Top8PickOut", "Top8CalculateRequest",
     "LeaderboardEntry",
-    "PlayerOut",
+    "PlayerOut", "PlayerFormOut", "MatchPlayerOut",
 ]

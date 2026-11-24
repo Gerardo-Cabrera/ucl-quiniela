@@ -10,8 +10,8 @@ import { LAST_ACTIVITY_KEY, SESSION_IDLE_MS } from "@/config";
 
 /** onError reutilizable para mutaciones sin área de error propia: muestra el
  *  detalle del backend (o un mensaje genérico) en un toast, evitando fallos
- *  silenciosos. El modal de pronóstico ya muestra su error inline, así que ese
- *  hook no lo usa. */
+ *  silenciosos. El modal de pronóstico muestra ese mismo detalle inline, así que
+ *  ese hook no lo usa. */
 const useErrorToast = () => {
   const { t } = useTranslation();
   return useCallback(
@@ -91,7 +91,9 @@ export const useMatchPlayers = (matchId: number) =>
     queryKey: ["matches", matchId, "players"],
     queryFn:  () => matchesApi.getPlayers(matchId),
     enabled:  !!matchId,
-    staleTime: 1000 * 60 * 60, // las plantillas casi no cambian: cachear 1 h
+    // La plantilla casi no cambia, pero trae las bajas del partido (sancionados,
+    // lesionados, dudas), que el backend refresca cada pocas horas: 10 min de caché.
+    staleTime: 1000 * 60 * 10,
   });
 
 // ── PREDICTIONS ───────────────────────────────────────────────────────────────

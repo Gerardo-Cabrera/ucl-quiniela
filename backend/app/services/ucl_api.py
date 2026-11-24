@@ -230,6 +230,74 @@ async def fetch_win_probability(fixture_id: int) -> list[dict]:
     return _extract_response(response.json(), "predictions")
 
 
+async def fetch_absences(season: int | None = None) -> list[dict]:
+    """Bajas de TODA la competición en una sola petición (`/injuries?league&season`):
+    por partido, los jugadores que se lo pierden o son duda, con el motivo. Incluye los
+    partidos ya jugados; quien llama se queda con los que le interesan."""
+    response = await get_client().get(
+        f"{BASE_URL}/injuries",
+        params={
+            "league": settings.UCL_LEAGUE_ID,
+            "season": season or await resolve_season(),
+        },
+    )
+    response.raise_for_status()
+    return _extract_response(response.json(), "injuries")
+
+
+# Motivos de baja de `/injuries` que NO son una lesión. La API los da en inglés y sin
+# catálogo cerrado: lo que no sea sanción ni esté aquí se trata como lesión (rodilla,
+# músculo, enfermedad, cirugía...), que es con mucho lo más frecuente.
+_SUSPENSION_MARKS = ("card", "suspen")           # "Red Card", "Yellow Cards", "Suspended"
+_NOT_INJURY_REASONS = {
+    "off the roster", "inactive", "coach's decision", "lacking match fitness",
+    "personal reasons", "rest", "transfer negotiations",
+}
+_NOT_INJURY_MARKS = ("national", "international")   # convocado con su selección
+
+
+def absence_status(kind: str | None, reason: str | None) -> str:
+    """Clasifica una baja de `/injuries` (`type` + `reason`) en lo que muestra el
+    selector: "suspended" (sanción por tarjetas), "doubtful" (la API lo da como duda),
+    "unavailable" (fuera de la lista, decisión técnica...) o "injured"."""
+    text = (reason or "").strip().lower()
+    if any(mark in text for mark in _SUSPENSION_MARKS):
+        return "suspended"
+    if (kind or "").strip().lower() == "questionable":
+        return "doubtful"
+    if text in _NOT_INJURY_REASONS or any(mark in text for mark in _NOT_INJURY_MARKS):
+        return "unavailable"
+    return "injured"
+
+
+def parse_absences(items: list[dict]) -> dict[int, list[dict]]:
+    """Agrupa las bajas de `/injuries` por fixture: `api_fixture_id` → lista ordenada
+    (equipo, jugador) de {player_id, player, team, status, reason}. La API repite
+    entradas del mismo jugador en un partido: se deja una, y si difieren gana la baja
+    firme sobre la duda."""
+    by_fixture: dict[int, dict[int, dict]] = {}
+    for item in items:
+        player = item.get("player") or {}
+        fixture_id = (item.get("fixture") or {}).get("id")
+        if fixture_id is None or player.get("id") is None:
+            continue
+        absence = {
+            "player_id": player["id"],
+            "player":    player.get("name"),
+            "team":      (item.get("team") or {}).get("name"),
+            "status":    absence_status(player.get("type"), player.get("reason")),
+            "reason":    player.get("reason"),
+        }
+        seen = by_fixture.setdefault(fixture_id, {})
+        previous = seen.get(absence["player_id"])
+        if previous is None or previous["status"] == "doubtful":
+            seen[absence["player_id"]] = absence
+    return {
+        fixture_id: sorted(seen.values(), key=lambda a: (a["team"] or "", a["player"] or "", a["player_id"]))
+        for fixture_id, seen in by_fixture.items()
+    }
+
+
 def _percent(value) -> int | None:
     """'45%' → 45; None o ilegible → None."""
     try:
@@ -356,6 +424,35 @@ def parse_goal_events(events: list[dict]) -> list[dict]:
             "team": (event.get("team") or {}).get("name"),
         })
     return goals
+
+
+def _card_kind(detail: str | None) -> str:
+    """Detalle de una tarjeta de API-Football → "yellow", "second_yellow" o "red". La
+    segunda amarilla suele llegar como otra "Yellow Card" seguida de "Red Card", pero a
+    veces como "Second Yellow card": se distingue porque no cuenta igual para las
+    sanciones (ver services/suspensions.py)."""
+    text = (detail or "").lower()
+    if "second" in text and "yellow" in text:
+        return "second_yellow"
+    return "yellow" if "yellow" in text else "red"
+
+
+def parse_card_events(events: list[dict]) -> list[dict]:
+    """Tarjetas de un partido en orden cronológico: {player_id, player, team, card}, con
+    `card` = "yellow", "second_yellow" o "red". Se guardan por partido
+    (`Match.card_events`) para deducir quién está SANCIONADO en el siguiente (expulsión o
+    ciclo de amarillas) sin peticiones extra: los eventos ya se descargan para el primer gol."""
+    cards: list[dict] = []
+    for event in sorted(events, key=lambda e: (e["time"]["elapsed"], e["time"].get("extra") or 0)):
+        if event.get("type") != "Card":
+            continue
+        player = event.get("player") or {}
+        cards.append({
+            "player_id": player.get("id"), "player": player.get("name"),
+            "team": (event.get("team") or {}).get("name"),
+            "card": _card_kind(event.get("detail")),
+        })
+    return cards
 
 
 def get_first_goal_scorer(events: list[dict]) -> dict | None:

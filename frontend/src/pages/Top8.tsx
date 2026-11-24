@@ -17,6 +17,7 @@ import {
 import { Spinner, PointsChip } from "@/components/ui";
 import type { Player, TopPlayer } from "@/types";
 import { top8Hits } from "@/lib/top8";
+import { GoalsBadge, PlayerLegend, playerNotes } from "@/components/PlayerMarks";
 import { clsx } from "clsx";
 
 interface PickItem {
@@ -43,8 +44,13 @@ function PlayerSelect({
   const [search, setSearch] = useState("");
 
   const q = search.trim().toLowerCase();
+  // Los goleadores, primero (orden estable: a igualdad de goles se conserva el del
+  // backend, por equipo y nombre); se ordena ANTES de recortar para no dejarlos fuera.
   const hits = q
-    ? players.filter((p) => p.name.toLowerCase().includes(q)).slice(0, 40)
+    ? players
+        .filter((p) => p.name.toLowerCase().includes(q))
+        .sort((a, b) => (b.goals ?? 0) - (a.goals ?? 0))
+        .slice(0, 40)
     : [];
 
   return (
@@ -83,18 +89,26 @@ function PlayerSelect({
             />
           </div>
           {hits.length > 0 && (
-            <div className="mt-2 space-y-1 max-h-56 overflow-y-auto pr-1">
-              {hits.map((p) => (
-                <button
-                  key={p.api_player_id}
-                  onClick={() => { onSelect({ id: p.api_player_id, name: p.name }); setSearch(""); }}
-                  className="w-full px-3 py-2 rounded-lg text-sm text-left text-ucl-silver hover:bg-ucl-blue/30 hover:text-ucl-white transition-colors flex items-center justify-between gap-2"
-                >
-                  <span className="truncate">{p.name}</span>
-                  <span className="text-xs text-ucl-silver/40 shrink-0">{p.team_name}</span>
-                </button>
-              ))}
-            </div>
+            <>
+              <div className="mt-2 space-y-1 max-h-56 overflow-y-auto pr-1">
+                {hits.map((p) => (
+                  <button
+                    key={p.api_player_id}
+                    title={playerNotes(p, t)}
+                    onClick={() => { onSelect({ id: p.api_player_id, name: p.name }); setSearch(""); }}
+                    className="w-full px-3 py-2 rounded-lg text-sm text-left text-ucl-silver hover:bg-ucl-blue/30 hover:text-ucl-white transition-colors flex items-center justify-between gap-2"
+                  >
+                    <span className="min-w-0 flex items-center gap-2">
+                      <span className="truncate">{p.name}</span>
+                      {/* Goles en esta Champions; dorado con estrella = máximo goleador de su equipo. */}
+                      {!!p.goals && <GoalsBadge goals={p.goals} top={!!p.team_top_scorer} className="shrink-0" />}
+                    </span>
+                    <span className="text-xs text-ucl-silver/40 shrink-0">{p.team_name}</span>
+                  </button>
+                ))}
+              </div>
+              <PlayerLegend players={hits} className="mt-2" />
+            </>
           )}
         </>
       )}

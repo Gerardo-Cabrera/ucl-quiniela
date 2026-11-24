@@ -42,6 +42,14 @@ class Settings(BaseSettings):
     # reabre los pronósticos desde ese plazo hasta que arranca ese primer partido.
     PREDICTION_LEAD_MINUTES: int = 60
 
+    # Arrancar los jobs (sync con API-Football y cálculo de puntos) con la app. Solo UNA
+    # instancia debe tenerlos activos contra la misma BD: con `false`, la API funciona
+    # igual pero no sincroniza ni puntúa nada por su cuenta. Sirve para levantar una
+    # segunda instancia (p. ej. al mover el backend de región) y verificarla antes de
+    # apagar la anterior, y para desarrollar en local sin gastar cuota de la API. Los
+    # endpoints admin de sync siguen funcionando (lanzan el job a mano).
+    SCHEDULER_ENABLED: bool = True
+
     # Scheduler intervals.
     # Sync de fixtures ADAPTATIVO (ver sync_fixtures): la tarea corre cada
     # SYNC_FIXTURES_MINUTES pero solo llama a la API si hay un partido EN JUEGO
@@ -65,6 +73,10 @@ class Settings(BaseSettings):
     # así para caber en el plan gratuito (~100 req/día) junto a los demás jobs.
     SYNC_PROBABILITIES_HOURS: int = 24
     PROBABILITIES_LOOKAHEAD_DAYS: int = 7
+    # Bajas (lesionados, sancionados, dudas): UNA petición a `/injuries` trae las de toda
+    # la competición. La API las actualiza cada pocas horas; el dato importa sobre todo
+    # la víspera y el día del partido.
+    SYNC_ABSENCES_HOURS: int = Field(default=4, gt=0)
     # Fallback: si un partido de fase de liga sigue LIVE pasados estos minutos desde
     # el kickoff, se da por finalizado (135 = 90' + descanso + añadido + margen). No
     # aplica a eliminatorias (prórroga/penales pueden superarlo).

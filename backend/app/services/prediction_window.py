@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.core.time import tz_day
 from app.crud.app_state import app_state_crud
-from app.crud.matches import match_crud
+from app.crud.matches import first_kickoffs_by_day, match_crud
 from app.models.match import Match, MatchStatus
 
 
@@ -31,13 +31,25 @@ def _predictable(match: Match, first_kickoff: datetime | None, override: bool, n
     return now < _limit(first_kickoff, override)
 
 
-async def annotate_predictable(db: AsyncSession, matches: list[Match], tz: tzinfo) -> None:
+async def annotate_predictable(
+    db: AsyncSession, matches: list[Match], tz: tzinfo, *, complete: bool = False
+) -> None:
     """Setea `match.predictable` en cada partido (atributo transitorio que serializa
-    MatchOut). Una lectura del interruptor + una de kickoffs para toda la lista."""
-    if not matches:
+    MatchOut). Una lectura del interruptor + una de kickoffs para toda la lista, y solo
+    las imprescindibles (cada consulta es un viaje a la BD):
+    - sin ningún partido SCHEDULED no hay nada pronosticable: ninguna consulta;
+    - `complete=True` (la lista son TODOS los partidos, p. ej. `/matches` sin filtros):
+      los kickoffs salen de la propia lista, sin la segunda consulta. Con una lista
+      parcial NO vale: faltaría el primer partido real del día."""
+    if not any(match.status == MatchStatus.SCHEDULED for match in matches):
+        for match in matches:
+            match.predictable = False
         return
     override = await app_state_crud.get_prediction_override(db)
-    first_kickoffs = await match_crud.day_first_kickoffs(db, tz)
+    if complete:
+        first_kickoffs = first_kickoffs_by_day((m.match_date for m in matches), tz)
+    else:
+        first_kickoffs = await match_crud.day_first_kickoffs(db, tz)
     now = datetime.now(timezone.utc)
     for match in matches:
         fk = first_kickoffs.get(tz_day(match.match_date, tz))

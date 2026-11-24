@@ -1,8 +1,24 @@
+from collections.abc import Iterable
 from datetime import date, datetime, timezone, tzinfo
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import and_, func, or_, select
+from sqlalchemy.orm import undefer
 from app.models.match import Match, MatchPhase, MatchStatus
 from app.core.time import as_utc, tz_day
+
+
+def first_kickoffs_by_day(match_dates: Iterable[datetime], tz: tzinfo) -> dict[date, datetime]:
+    """Hora (UTC-aware) del PRIMER partido de cada jornada (día en la zona del torneo)
+    a partir de las fechas de los partidos. Regla pura, sin BD: la comparten la consulta
+    `MatchCRUD.day_first_kickoffs` y quien ya tiene TODOS los partidos cargados (la
+    lista de `/matches`), que así no repite la consulta."""
+    firsts: dict[date, datetime] = {}
+    for match_date in match_dates:
+        md = as_utc(match_date)
+        day = tz_day(match_date, tz)
+        if day not in firsts or md < firsts[day]:
+            firsts[day] = md
+    return firsts
 
 
 class MatchCRUD:
@@ -21,8 +37,15 @@ class MatchCRUD:
         result = await db.execute(query)
         return list(result.scalars().all())
 
-    async def get_by_id(self, db: AsyncSession, match_id: int) -> Match | None:
-        result = await db.execute(select(Match).where(Match.id == match_id))
+    async def get_by_id(
+        self, db: AsyncSession, match_id: int, *, with_absences: bool = False
+    ) -> Match | None:
+        """`with_absences`: trae también `Match.absences` (columna diferida) en la misma
+        consulta; sin ello, leer ese atributo en una sesión async falla."""
+        query = select(Match).where(Match.id == match_id)
+        if with_absences:
+            query = query.options(undefer(Match.absences))
+        result = await db.execute(query)
         return result.scalar_one_or_none()
 
     async def get_by_teams(self, db: AsyncSession, home_team: str, away_team: str) -> list[Match]:
@@ -39,19 +62,37 @@ class MatchCRUD:
         )
         return list(result.scalars().all())
 
+    async def get_team_schedules(self, db: AsyncSession, team_names: list[str]):
+        """Todos los partidos (del estado que sean) de esos equipos, en orden cronológico,
+        con lo que hace falta para las marcas del selector de jugadores: fase, estado y
+        los goles y tarjetas guardados. Una sola consulta de pocas filas (un equipo juega
+        8 partidos de liga), con las columnas diferidas pedidas de forma explícita."""
+        result = await db.execute(
+            select(
+                Match.id, Match.home_team, Match.away_team, Match.phase, Match.status,
+                Match.match_date, Match.goal_events, Match.card_events,
+            )
+            .where(or_(Match.home_team.in_(team_names), Match.away_team.in_(team_names)))
+            .order_by(Match.match_date, Match.id)
+        )
+        return result.all()
+
+    async def get_goal_events(self, db: AsyncSession) -> list[list[dict]]:
+        """Goles guardados de todos los partidos finalizados (uno por partido)."""
+        result = await db.execute(
+            select(Match.goal_events).where(
+                Match.status == MatchStatus.FINISHED, Match.goal_events.is_not(None)
+            )
+        )
+        return list(result.scalars())
+
     async def day_first_kickoffs(self, db: AsyncSession, tz: tzinfo) -> dict[date, datetime]:
         """Hora (UTC-aware) del PRIMER partido de cada jornada (día en la zona del
         torneo). Una sola consulta ligera (solo la columna fecha) + agrupación en
         Python: sirve para el plazo de pronósticos sin N+1. Considera TODOS los
         partidos del día, no solo los filtrados, para no perder el kickoff real."""
         result = await db.execute(select(Match.match_date))
-        firsts: dict[date, datetime] = {}
-        for (match_date,) in result.all():
-            md = as_utc(match_date)
-            day = tz_day(match_date, tz)
-            if day not in firsts or md < firsts[day]:
-                firsts[day] = md
-        return firsts
+        return first_kickoffs_by_day(result.scalars(), tz)
 
     async def started_day_match_ids(self, db: AsyncSession, tz: tzinfo) -> set[int]:
         """IDs de los partidos de toda jornada ya INICIADA (su primer partido, en

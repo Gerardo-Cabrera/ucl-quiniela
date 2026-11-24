@@ -6,6 +6,10 @@ import { PlayerPicker } from "@/components/PlayerPicker";
 import type { Match, Prediction } from "@/types";
 import { useSavePrediction, useMatchPlayers } from "@/hooks";
 import { Spinner } from "@/components/ui";
+import { apiErrorMessage } from "@/lib/apiError";
+
+// Tope de goles por equipo: el mismo que valida el backend (PredictionCreate, le=20).
+const MAX_SCORE = 20;
 
 interface Props {
   match: Match;
@@ -24,7 +28,7 @@ function ScoreInput({ value, onChange }: { value: number; onChange: (v: number) 
       </button>
       <span className="font-display text-4xl text-ucl-white w-10 text-center">{value}</span>
       <button
-        onClick={() => onChange(value + 1)}
+        onClick={() => onChange(Math.min(MAX_SCORE, value + 1))}
         className="w-8 h-8 rounded-full border border-ucl-blue/60 text-ucl-silver hover:border-ucl-gold hover:text-ucl-gold transition-colors flex items-center justify-center"
       >
         <Plus size={14} />
@@ -40,7 +44,7 @@ export function PredictionModal({ match, prediction, onClose }: Props) {
   const [firstGoalPlayerId, setFirstGoalPlayerId] = useState<number | null>(
     prediction?.first_goal_player_id ?? null,
   );
-  const { mutate: save, isPending, isSuccess, isError } = useSavePrediction();
+  const { mutate: save, isPending, isSuccess, isError, error } = useSavePrediction();
   const { data: players = [], isLoading: playersLoading } = useMatchPlayers(match.id);
 
   // Sin goles en el marcador no hay primer gol: el selector se oculta y se limpia
@@ -67,8 +71,11 @@ export function PredictionModal({ match, prediction, onClose }: Props) {
       {/* Backdrop */}
       <div className="absolute inset-0 bg-ucl-navy/80 backdrop-blur-sm" onClick={onClose} />
 
-      {/* Modal */}
-      <div className="relative w-full max-w-md card border-ucl-gold/25 p-6 shadow-2xl animate-in">
+      {/* Modal: nunca más alto que la pantalla. Es una columna flex en la que solo cede
+          la cuadrícula de jugadores (se desplaza por dentro), así el botón de guardar
+          queda siempre a la vista; `overflow-y-auto` es el último recurso en pantallas
+          muy bajas, donde antes el modal quedaba cortado por arriba y por abajo. */}
+      <div className="relative w-full max-w-md max-h-[calc(100dvh-2rem)] overflow-y-auto flex flex-col card border-ucl-gold/25 p-6 shadow-2xl animate-in">
         {/* Close */}
         <button onClick={onClose} className="absolute top-4 right-4 text-ucl-silver/60 hover:text-ucl-white transition-colors">
           <X size={20} />
@@ -82,7 +89,7 @@ export function PredictionModal({ match, prediction, onClose }: Props) {
         </p>
 
         {/* Score picker */}
-        <div className="flex items-center justify-between gap-4 bg-ucl-navy/60 rounded-xl p-5 mb-5">
+        <div className="shrink-0 flex items-center justify-between gap-4 bg-ucl-navy/60 rounded-xl p-5 mb-5">
           <div className="flex flex-col items-center gap-3">
             {match.home_team_logo && <img src={match.home_team_logo} alt="" className="w-10 h-10 object-contain" />}
             <span className="text-xs text-ucl-silver/70 text-center">{match.home_team}</span>
@@ -98,7 +105,7 @@ export function PredictionModal({ match, prediction, onClose }: Props) {
 
         {/* First goal scorer: solo con goles en el marcador (y aun así opcional) */}
         {hasGoals && (
-        <div className="mb-6">
+        <div className="mb-6 min-h-0 flex flex-col">
           <label className="block text-xs text-ucl-silver/70 mb-2 font-mono uppercase tracking-wider">
             {t("predictionModal.firstScorer")}
           </label>
@@ -124,16 +131,19 @@ export function PredictionModal({ match, prediction, onClose }: Props) {
         <button
           onClick={handleSave}
           disabled={isPending || isSuccess}
-          className="btn-primary w-full flex items-center justify-center gap-2"
+          className="btn-primary w-full shrink-0 flex items-center justify-center gap-2"
         >
           {isPending ? <><Spinner size="sm" /> {t("predictionModal.saving")}</> :
            isSuccess  ? t("predictionModal.saved") :
            t("predictionModal.save")}
         </button>
 
+        {/* El motivo que da el backend (plazo de la jornada cerrado, partido ya empezado,
+            sin conexión...): "intenta de nuevo" a secas invitaba a repetir algo que no
+            puede salir. El texto genérico queda de respaldo. */}
         {isError && (
-          <p className="mt-3 text-red-400 text-sm text-center">
-            {t("predictionModal.error")}
+          <p role="alert" className="mt-3 shrink-0 text-red-400 text-sm text-center">
+            {apiErrorMessage(error, t("predictionModal.error"))}
           </p>
         )}
       </div>

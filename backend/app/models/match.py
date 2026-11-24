@@ -63,6 +63,16 @@ class Match(Base):
     # guardados al consultar los eventos para el primer gol. Base de los rankings de
     # goleadores/asistidores de la quiniela (fase de liga en adelante) sin cuota extra.
     goal_events: Mapped[list[dict] | None] = mapped_column(JSON, nullable=True)
+    # Tarjetas del partido ({player_id, player, team, card: "yellow"|"second_yellow"|"red"}),
+    # guardadas al finalizar con los mismos eventos: de ahí se deduce quién está
+    # SANCIONADO en el partido siguiente (expulsión o ciclo de amarillas; ver
+    # services/suspensions.py). `deferred`: la lista de partidos se consulta cada minuto
+    # por participante y no las usa; solo se cargan donde se piden.
+    card_events: Mapped[list[dict] | None] = mapped_column(JSON, nullable=True, deferred=True)
+    # Bajas del partido según API-Football (`/injuries`): {player_id, player, team,
+    # status: "injured"|"suspended"|"doubtful"|"unavailable", reason}. Las refresca el job
+    # de bajas mientras el partido no haya terminado. `deferred` por el mismo motivo.
+    absences: Mapped[list[dict] | None] = mapped_column(JSON, nullable=True, deferred=True)
 
     # Probabilidad de victoria PRE-partido según API-Football (`/predictions`, `percent`
     # local/empate/visitante en % enteros). Solo se consulta para el PRÓXIMO partido de

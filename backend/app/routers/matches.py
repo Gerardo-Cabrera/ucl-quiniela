@@ -3,15 +3,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models.match import MatchPhase, MatchStatus
 from app.models.user import User
-from app.schemas import MatchOut, PlayerOut
+from app.schemas import MatchOut, MatchPlayerOut
 from app.core.deps import get_current_user, get_admin_user
 from app.core.rate_limit import limiter
 from app.config import settings
 from app.services.scheduler import (
     sync_ucl_fixtures, sync_players, players_sync_in_progress, sync_win_probabilities,
+    sync_absences,
 )
 from app.services.prediction_window import annotate_predictable
-from app.crud import match_crud, player_crud
+from app.services.player_insights import match_players
+from app.crud import match_crud
 
 router = APIRouter(prefix="/matches", tags=["Matches"])
 
@@ -26,7 +28,11 @@ async def get_matches(
     _: User = Depends(get_current_user),
 ):
     matches = await match_crud.get_all(db, phase=phase, status=status)
-    await annotate_predictable(db, matches, _TOURNAMENT_TZ)
+    # Sin filtros la lista es completa (lo que pide el frontend, cada minuto): el primer
+    # partido de cada día sale de ella y se ahorra una consulta.
+    await annotate_predictable(
+        db, matches, _TOURNAMENT_TZ, complete=phase is None and status is None
+    )
     return matches
 
 
@@ -43,21 +49,24 @@ async def get_match(
     return match
 
 
-@router.get("/{match_id}/players", response_model=list[PlayerOut])
+@router.get("/{match_id}/players", response_model=list[MatchPlayerOut])
 async def get_match_players(
     match_id: int,
     search: str | None = None,
     db: AsyncSession = Depends(get_db),
     _: User = Depends(get_current_user),
 ):
-    """Plantillas de los dos equipos del partido, para elegir el primer goleador.
-    `?search=` filtra por subcadena del nombre (literal, sin distinguir mayúsculas):
-    sirve para obtener el id de un goleador para el backfill admin. Vacío si aún no
-    se han sincronizado las plantillas."""
-    match = await match_crud.get_by_id(db, match_id)
+    """Plantillas de los dos equipos del partido, para elegir el primer goleador. Cada
+    jugador trae lo que ayuda a decidir: goles en la quiniela (`goals`), si es el máximo
+    goleador de su equipo (`team_top_scorer`) y si es baja o duda para ESTE partido
+    (`availability`: injured / suspended / doubtful / unavailable, con su motivo; la
+    sanción incluye los ciclos de amarillas). `?search=` filtra por subcadena del nombre (literal,
+    sin distinguir mayúsculas): sirve para obtener el id de un goleador para el backfill
+    admin. Vacío si aún no se han sincronizado las plantillas."""
+    match = await match_crud.get_by_id(db, match_id, with_absences=True)
     if not match:
         raise HTTPException(status_code=404, detail="Partido no encontrado.")
-    return await player_crud.get_for_teams(db, [match.home_team, match.away_team], name_query=search)
+    return await match_players(db, match, search)
 
 
 @router.post("/sync", status_code=202, summary="Admin: Forzar sync con API-Football")
@@ -101,3 +110,18 @@ async def force_sync_probabilities(
     (SYNC_PROBABILITIES_HOURS); con `?force=true` las pide todas."""
     background_tasks.add_task(sync_win_probabilities, force)
     return {"message": "Sincronización de probabilidades iniciada."}
+
+
+
+@router.post("/sync-absences", status_code=202, summary="Admin: Forzar sync de bajas")
+@limiter.limit(settings.RATE_LIMIT_SYNC)
+async def force_sync_absences(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    _: User = Depends(get_admin_user),
+):
+    """Actualiza en background las bajas (lesionados, sancionados, dudas) de los partidos
+    por jugar: una sola petición a API-Football. Para refrescarlas antes del cierre de
+    una jornada sin esperar al job (cada SYNC_ABSENCES_HOURS)."""
+    background_tasks.add_task(sync_absences)
+    return {"message": "Sincronización de bajas iniciada."}

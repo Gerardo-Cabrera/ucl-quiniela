@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 from sqlalchemy import select, update, or_, and_, func
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import selectinload, undefer
 from sqlalchemy.exc import SQLAlchemyError
 from httpx import HTTPStatusError, RequestError
 from app.database import AsyncSessionLocal
@@ -399,6 +399,41 @@ async def sync_win_probabilities(force: bool = False):
     await _retry(lambda: _do_sync_win_probabilities(force=force), "sync_win_probabilities")
 
 
+async def _do_sync_absences() -> None:
+    """Bajas (lesionados, sancionados, dudas, fuera de la lista) de los partidos SIN
+    finalizar: una sola petición a `/injuries` trae las de toda la competición y cada
+    partido se queda con su lista (`Match.absences`), que el selector de goleador usa
+    para marcar a quien no va a jugar. Cada corrida REEMPLAZA la lista del partido (un
+    jugador recuperado deja de figurar). Si la API no devuelve ninguna baja se conserva
+    lo guardado: con decenas de partidos por jugar, cero es una respuesta anómala, no
+    una enfermería vacía."""
+    by_fixture = ucl_api.parse_absences(await ucl_api.fetch_absences())
+    if not by_fixture:
+        logger.warning("Bajas: la API no devolvió ninguna; se conservan las guardadas.")
+        return
+    async with AsyncSessionLocal() as db:
+        matches = (await db.execute(
+            select(Match)
+            .where(Match.status != MatchStatus.FINISHED)
+            .options(undefer(Match.absences))
+        )).scalars().all()
+        changed = 0
+        for match in matches:
+            current = by_fixture.get(match.api_fixture_id, [])
+            if (match.absences or []) != current:
+                match.absences = current
+                changed += 1
+        await db.commit()
+    logger.info("Bajas: %d partidos por jugar revisados, %d actualizados.", len(matches), changed)
+
+
+async def sync_absences():
+    """Bajas de los partidos por jugar (API-Football `/injuries`, una petición). Cada
+    SYNC_ABSENCES_HOURS y al arrancar; forzable con POST /matches/sync-absences (admin)."""
+    logger.info("Starting absences sync...")
+    await _retry(_do_sync_absences, "sync_absences")
+
+
 async def _do_sync_first_goals():
     """Eventos (`/fixtures/events`) de los partidos EN VIVO o finalizados con algo
     pendiente; una petición por partido y corrida:
@@ -415,7 +450,11 @@ async def _do_sync_first_goals():
       base de goleadores/asistidores. Se rellenan también en partidos ya resueltos.
     Se confía en los eventos: si al finalizar el primer gol cambió (gol anulado, otra
     atribución, jugador atribuido tarde) se corrige y las predicciones ya puntuadas se
-    marcan para recálculo."""
+    marcan para recálculo.
+    - **tarjetas del partido** (`card_events`, solo al finalizar): amarillas y rojas por
+      jugador, de los mismos eventos; de ellas se deduce quién está sancionado en el
+      partido siguiente. Los finalizados que este job NO consulta (los 0-0 y los
+      cerrados antes de existir el dato) los rellena `_do_backfill_card_events`."""
     grace_cutoff = datetime.now(timezone.utc) - timedelta(hours=settings.FIRST_GOAL_GRACE_HOURS)
     async with AsyncSessionLocal() as db:
         result = await db.execute(
@@ -436,6 +475,8 @@ async def _do_sync_first_goals():
                 # Solo si hubo gol (en el marcador, o ya registrado): los 0-0 no se consultan.
                 or_((Match.home_score + Match.away_score) > 0, Match.first_goal_team.is_not(None)),
             )
+            # Tarjetas cargadas: reasignar las mismas no genera un UPDATE.
+            .options(undefer(Match.card_events))
         )
         matches = result.scalars().all()
 
@@ -459,6 +500,7 @@ async def _do_sync_first_goals():
                 continue
             if match.status == MatchStatus.FINISHED:
                 match.goal_events = ucl_api.parse_goal_events(events)
+                match.card_events = ucl_api.parse_card_events(events)
             scorer = ucl_api.get_first_goal_scorer(events) or {}
             if (scorer.get("team"), scorer.get("player_id")) == (match.first_goal_team, match.first_goal_player_id):
                 continue   # sin cambios (o aún sin gol en los eventos)
@@ -482,11 +524,47 @@ async def _do_sync_first_goals():
         logger.info("Eventos procesados de %d partidos; primer gol actualizado en %d.", len(matches), updated)
 
 
+async def _do_backfill_card_events() -> None:
+    """Tarjetas de los partidos FINALIZADOS que aún no las tienen y que el job de eventos
+    no consulta: los 0-0 (sin primer gol que buscar) y los cerrados antes de existir este
+    dato (el primer arranque tras desplegarlo los rellena todos). Solo escribe
+    `card_events`: goles, primer gol y puntos de un partido ya cerrado NO se tocan aunque
+    los eventos de hoy difieran. Peticiones ESPACIADAS (`_fetch_paced`): en ráfaga la API
+    corta por límite por minuto (72 seguidas dejaron 10 sin datos). Sin sesión abierta
+    mientras se espera a la API. Lo que falle se reintenta en la siguiente corrida."""
+    async with AsyncSessionLocal() as db:
+        pending = (await db.execute(
+            select(Match.id, Match.api_fixture_id)
+            .where(Match.status == MatchStatus.FINISHED, Match.card_events.is_(None))
+            .order_by(Match.match_date)
+        )).all()
+    if not pending:
+        return
+    results = await _fetch_paced(ucl_api.fetch_fixture_events, [fixture_id for _, fixture_id in pending])
+    saved = 0
+    async with AsyncSessionLocal() as db:
+        for (match_id, fixture_id), events in zip(pending, results):
+            if isinstance(events, Exception):
+                logger.warning("No se pudieron obtener las tarjetas del fixture %s: %s", fixture_id, events)
+                continue
+            await db.execute(
+                update(Match).where(Match.id == match_id)
+                .values(card_events=ucl_api.parse_card_events(events))
+            )
+            saved += 1
+        await db.commit()
+    logger.info("Tarjetas guardadas de %d de %d partidos finalizados que no las tenían.", saved, len(pending))
+
+
 async def sync_first_goals():
     """Eventos de partidos en vivo o finalizados con algo pendiente (primer gol o
-    goles guardados). Cada hora y tras cada sync de fixtures (en vivo, cada minuto)."""
+    goles guardados). Cada hora y tras cada sync de fixtures (en vivo, cada minuto).
+    El job horario rellena además las tarjetas que falten (ver `_do_backfill_card_events`):
+    va aquí y no tras cada sync de fixtures porque un relleno grande tarda minutos y no
+    debe retener el ciclo que actualiza los marcadores en vivo."""
     logger.info("Starting first goals sync...")
     await _retry(_do_sync_first_goals, "sync_first_goals")
+    await _retry(_do_backfill_card_events, "backfill_card_events")
 
 
 async def _do_calculate_points():
@@ -628,8 +706,10 @@ async def start_scheduler():
     # Probabilidad de victoria del próximo partido de cada equipo: tras los fixtures;
     # solo pide lo que falte o esté vencido (un reinicio no gasta cuota).
     scheduler.add_job(sync_win_probabilities,   IntervalTrigger(hours=settings.SYNC_PROBABILITIES_HOURS), id="sync_probabilities", replace_existing=True, next_run_time=now + timedelta(seconds=45))
+    # Bajas de los partidos por jugar: una sola petición por corrida, tras los fixtures.
+    scheduler.add_job(sync_absences,            IntervalTrigger(hours=settings.SYNC_ABSENCES_HOURS),      id="sync_absences",   replace_existing=True, next_run_time=now + timedelta(seconds=50))
     scheduler.start()
-    logger.info("Scheduler started with 6 jobs.")
+    logger.info("Scheduler started with 7 jobs.")
 
 
 def stop_scheduler():

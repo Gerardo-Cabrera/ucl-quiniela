@@ -4,11 +4,16 @@ import type {
   TournamentPick, TournamentStats, StatsSummary, MatchdaysSummary, BackfillPayload,
 } from "@/types";
 
+// Las rutas de colección llevan la barra final con la que el backend las define
+// (`/api/matches/`): sin ella FastAPI responde 307 hacia la versión con barra y cada
+// llamada son DOS viajes al servidor (en los POST, además, se reenvía el cuerpo). Al
+// añadir un endpoint, copia la ruta tal como sale en Swagger (/docs).
+
 // ── MATCHES ───────────────────────────────────────────────────────────────────
 
 export const matchesApi = {
   getAll: async (): Promise<Match[]> => {
-    const { data } = await apiClient.get("/api/matches");
+    const { data } = await apiClient.get("/api/matches/");
     return data;
   },
   getPlayers: async (id: number): Promise<Player[]> => {
@@ -21,7 +26,7 @@ export const matchesApi = {
 
 export const predictionsApi = {
   getMine: async (): Promise<Prediction[]> => {
-    const { data } = await apiClient.get("/api/predictions");
+    const { data } = await apiClient.get("/api/predictions/");
     return data;
   },
   getForUser: async (userId: number): Promise<Prediction[]> => {
@@ -34,7 +39,7 @@ export const predictionsApi = {
     predicted_away: number;
     first_goal_player_id?: number;
   }): Promise<Prediction> => {
-    const { data } = await apiClient.post("/api/predictions", payload);
+    const { data } = await apiClient.post("/api/predictions/", payload);
     return data;
   },
   delete: async (id: number): Promise<void> => {
@@ -59,7 +64,7 @@ export const predictionsApi = {
 
 export const leaderboardApi = {
   get: async (): Promise<LeaderboardEntry[]> => {
-    const { data } = await apiClient.get("/api/leaderboard");
+    const { data } = await apiClient.get("/api/leaderboard/");
     return data;
   },
 };
@@ -68,7 +73,7 @@ export const leaderboardApi = {
 
 export const statsApi = {
   get: async (): Promise<StatsSummary> => {
-    const { data } = await apiClient.get("/api/stats");
+    const { data } = await apiClient.get("/api/stats/");
     return data;
   },
 };
@@ -77,7 +82,7 @@ export const statsApi = {
 
 export const matchdaysApi = {
   get: async (): Promise<MatchdaysSummary> => {
-    const { data } = await apiClient.get("/api/matchdays");
+    const { data } = await apiClient.get("/api/matchdays/");
     return data;
   },
 };
@@ -107,7 +112,7 @@ export const top8Api = {
     return data;
   },
   save: async (picks: { position: number; team_name: string }[]): Promise<Top8Pick[]> => {
-    const { data } = await apiClient.post("/api/top8", { picks });
+    const { data } = await apiClient.post("/api/top8/", { picks });
     return data;
   },
 };
@@ -135,7 +140,7 @@ export const tournamentApi = {
     mvp_player_id?: number | null;
     top_scorer_player_id?: number | null;
   }): Promise<TournamentPick> => {
-    const { data } = await apiClient.post("/api/tournament", payload);
+    const { data } = await apiClient.post("/api/tournament/", payload);
     return data;
   },
 };
