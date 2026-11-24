@@ -7,6 +7,7 @@ import { matchesApi, predictionsApi, leaderboardApi, top8Api, tournamentApi, con
 import { apiErrorMessage } from "@/lib/apiError";
 import { useAuthStore } from "@/store/authStore";
 import { LAST_ACTIVITY_KEY, SESSION_IDLE_MS } from "@/config";
+import type { ManualAvailability } from "@/types";
 
 /** onError reutilizable para mutaciones sin área de error propia: muestra el
  *  detalle del backend (o un mensaje genérico) en un toast, evitando fallos
@@ -95,6 +96,25 @@ export const useMatchPlayers = (matchId: number) =>
     // lesionados, dudas), que el backend refresca cada pocas horas: 10 min de caché.
     staleTime: 1000 * 60 * 10,
   });
+
+// Admin: corrección manual de la disponibilidad de un jugador. La respuesta trae las
+// plantillas del partido ya actualizadas: se vuelcan en la caché sin otra petición.
+export const useSetPlayerAvailability = (matchId: number) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ playerId, status, reason }: { playerId: number; status: ManualAvailability; reason: string | null }) =>
+      matchesApi.setPlayerAvailability(matchId, playerId, { status, reason }),
+    onSuccess: (players) => qc.setQueryData(["matches", matchId, "players"], players),
+  });
+};
+
+export const useClearPlayerAvailability = (matchId: number) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (playerId: number) => matchesApi.clearPlayerAvailability(matchId, playerId),
+    onSuccess: (players) => qc.setQueryData(["matches", matchId, "players"], players),
+  });
+};
 
 // ── PREDICTIONS ───────────────────────────────────────────────────────────────
 

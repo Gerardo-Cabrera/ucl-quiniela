@@ -124,6 +124,7 @@ export function PredictionModal({ match, prediction, onClose }: Props) {
               ]}
               value={firstGoalPlayerId}
               onChange={setFirstGoalPlayerId}
+              matchId={match.id}
             />
           )}
         </div>

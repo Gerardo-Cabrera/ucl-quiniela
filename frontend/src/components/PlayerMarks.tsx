@@ -66,6 +66,7 @@ export function playerNotes(p: Player, t: TFunction): string {
     p.team_top_scorer ? t("playerMarks.topScorer") : null,
     p.goals ? t("playerMarks.goals", { count: p.goals }) : null,
     availabilityLabel(p, t),
+    p.availability_manual ? t("playerMarks.manual") : null,
   ].filter(Boolean);
   return [p.name, ...notes].join(" · ");
 }
