@@ -6,6 +6,10 @@ import { PlayerPicker } from "@/components/PlayerPicker";
 import type { Match, Prediction } from "@/types";
 import { useSavePrediction, useMatchPlayers } from "@/hooks";
 import { Spinner } from "@/components/ui";
+import { apiErrorMessage } from "@/lib/apiError";
+
+// Tope de goles por equipo: el mismo que valida el backend (PredictionCreate, le=20).
+const MAX_SCORE = 20;
 
 interface Props {
   match: Match;
@@ -24,7 +28,7 @@ function ScoreInput({ value, onChange }: { value: number; onChange: (v: number) 
       </button>
       <span className="font-display text-4xl text-ucl-white w-10 text-center">{value}</span>
       <button
-        onClick={() => onChange(value + 1)}
+        onClick={() => onChange(Math.min(MAX_SCORE, value + 1))}
         className="w-8 h-8 rounded-full border border-ucl-blue/60 text-ucl-silver hover:border-ucl-gold hover:text-ucl-gold transition-colors flex items-center justify-center"
       >
         <Plus size={14} />
@@ -40,7 +44,7 @@ export function PredictionModal({ match, prediction, onClose }: Props) {
   const [firstGoalPlayerId, setFirstGoalPlayerId] = useState<number | null>(
     prediction?.first_goal_player_id ?? null,
   );
-  const { mutate: save, isPending, isSuccess, isError } = useSavePrediction();
+  const { mutate: save, isPending, isSuccess, isError, error } = useSavePrediction();
   const { data: players = [], isLoading: playersLoading } = useMatchPlayers(match.id);
 
   // Sin goles en el marcador no hay primer gol: el selector se oculta y se limpia
@@ -134,9 +138,12 @@ export function PredictionModal({ match, prediction, onClose }: Props) {
            t("predictionModal.save")}
         </button>
 
+        {/* El motivo que da el backend (plazo de la jornada cerrado, partido ya empezado,
+            sin conexión...): "intenta de nuevo" a secas invitaba a repetir algo que no
+            puede salir. El texto genérico queda de respaldo. */}
         {isError && (
-          <p className="mt-3 text-red-400 text-sm text-center">
-            {t("predictionModal.error")}
+          <p role="alert" className="mt-3 shrink-0 text-red-400 text-sm text-center">
+            {apiErrorMessage(error, t("predictionModal.error"))}
           </p>
         )}
       </div>

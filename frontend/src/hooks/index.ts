@@ -10,8 +10,8 @@ import { LAST_ACTIVITY_KEY, SESSION_IDLE_MS } from "@/config";
 
 /** onError reutilizable para mutaciones sin área de error propia: muestra el
  *  detalle del backend (o un mensaje genérico) en un toast, evitando fallos
- *  silenciosos. El modal de pronóstico ya muestra su error inline, así que ese
- *  hook no lo usa. */
+ *  silenciosos. El modal de pronóstico muestra ese mismo detalle inline, así que
+ *  ese hook no lo usa. */
 const useErrorToast = () => {
   const { t } = useTranslation();
   return useCallback(
