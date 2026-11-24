@@ -70,9 +70,10 @@ async def get_match_players(
 
 
 async def _match_and_player(db: AsyncSession, match_id: int, player_id: int):
-    """Partido (con sus bajas cargadas) y jugador de una corrección manual; el jugador
+    """Partido (con sus bajas cargadas y la fila BLOQUEADA hasta el commit, para que dos
+    correcciones simultáneas no se pisen) y jugador de una corrección manual; el jugador
     debe pertenecer a uno de los dos equipos del partido."""
-    match = await match_crud.get_by_id(db, match_id, with_absences=True)
+    match = await match_crud.get_by_id(db, match_id, with_absences=True, for_update=True)
     if not match:
         raise HTTPException(status_code=404, detail="Partido no encontrado.")
     player = await player_crud.get_by_api_id(db, player_id)

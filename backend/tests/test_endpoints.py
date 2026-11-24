@@ -1454,6 +1454,20 @@ async def test_manual_availability_validates_its_input(admin_client: AsyncClient
     assert (await admin_client.put(f"{base}/10/availability", json={"status": "injured", "reason": "x" * 81})).status_code == 422
 
 
+def test_manual_corrections_lock_the_match_row():
+    """Corregir reescribe la lista entera del partido: la fila se lee con FOR UPDATE para
+    que dos correcciones simultáneas no partan de la misma lectura. (SQLite, la BD de la
+    suite, no bloquea filas: se comprueba la consulta que recibe PostgreSQL.)"""
+    from sqlalchemy.dialects import postgresql
+    from app.crud import match_crud
+
+    def sql(**kwargs) -> str:
+        return str(match_crud.by_id_query(1, **kwargs).compile(dialect=postgresql.dialect()))
+
+    assert "FOR UPDATE" in sql(with_absences=True, for_update=True)
+    assert "FOR UPDATE" not in sql(with_absences=True)        # las lecturas no bloquean
+
+
 @pytest.mark.asyncio
 async def test_sync_absences_requires_admin(auth_client: AsyncClient):
     assert (await auth_client.post("/api/matches/sync-absences")).status_code == 403
