@@ -85,6 +85,18 @@ def test_nothing_is_claimed_until_the_previous_match_is_played_and_has_its_cards
     assert suspended_for_match(TEAM, 99, []) == {}
 
 
+def test_a_postponed_match_does_not_serve_the_suspension():
+    """El partido siguiente al de la tarjeta se aplazó: la sanción se cumple en el primero
+    que sí se juegue. Un aplazado tampoco tapa una sanción ya cumplida."""
+    postponed = (LEAGUE, MatchStatus.POSTPONED, None)
+    three = [played(card())] * 3
+    assert suspended(*three, postponed, upcoming()) == {P: YELLOW_CARDS}
+    assert suspended(played(card("red")), postponed, postponed, upcoming()) == {P: RED_CARD}
+    assert suspended(*three, played(), postponed, upcoming()) == {}        # ya la cumplió
+    # Si el partido consultado es el aplazado, se evalúa como cualquier otro.
+    assert suspended(*three, postponed) == {P: YELLOW_CARDS}
+
+
 def test_only_the_teams_own_cards_count():
     rival = card(player_id=OTHER, team="Barcelona")
     assert suspended(played(rival), played(rival), played(rival, card("red", OTHER, "Barcelona")), upcoming()) == {}

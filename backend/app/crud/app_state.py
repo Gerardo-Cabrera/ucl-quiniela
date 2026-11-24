@@ -6,11 +6,19 @@ _SINGLETON_ID = 1
 
 
 class AppStateCRUD:
-    """Acceso a la fila única de estado global. `get` la crea perezosamente si falta
-    (la migración 0006 ya la siembra en prod; esto cubre el create_all de los tests)."""
+    """Acceso a la fila única de estado global.
+
+    Leer NUNCA escribe: los GET van en una sesión de solo lectura (autocommit) y varias
+    vistas consultan este estado en cada refresco. Si la fila falta (la migración 0006 la
+    siembra en producción; en los tests se parte de un `create_all` sin ella), las
+    lecturas devuelven los valores por defecto y es la primera ESCRITURA la que la crea."""
+
+    async def _find(self, db: AsyncSession) -> AppState | None:
+        return await db.get(AppState, _SINGLETON_ID)
 
     async def get(self, db: AsyncSession) -> AppState:
-        state = await db.get(AppState, _SINGLETON_ID)
+        """La fila, creándola si falta. Solo para escribir (lo usan los `set_*`)."""
+        state = await self._find(db)
         if state is None:
             state = AppState(id=_SINGLETON_ID, prediction_override=False)
             db.add(state)
@@ -18,7 +26,8 @@ class AppStateCRUD:
         return state
 
     async def get_prediction_override(self, db: AsyncSession) -> bool:
-        return (await self.get(db)).prediction_override
+        state = await self._find(db)
+        return bool(state and state.prediction_override)
 
     async def set_prediction_override(self, db: AsyncSession, enabled: bool) -> AppState:
         state = await self.get(db)
@@ -28,7 +37,8 @@ class AppStateCRUD:
 
     async def get_top8_actual(self, db: AsyncSession) -> list[str]:
         """Top 8 real ordenado 1.º-8.º (vacío hasta que se calcula)."""
-        return (await self.get(db)).top8_actual or []
+        state = await self._find(db)
+        return (state.top8_actual if state else None) or []
 
     async def set_top8_actual(self, db: AsyncSession, teams: list[str]) -> None:
         state = await self.get(db)
@@ -36,7 +46,8 @@ class AppStateCRUD:
         await db.flush()
 
     async def get_squads_synced_at(self, db: AsyncSession) -> datetime | None:
-        return (await self.get(db)).squads_synced_at
+        state = await self._find(db)
+        return state.squads_synced_at if state else None
 
     async def set_squads_synced_at(self, db: AsyncSession, when: datetime) -> None:
         state = await self.get(db)

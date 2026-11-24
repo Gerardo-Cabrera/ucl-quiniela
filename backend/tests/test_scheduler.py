@@ -759,6 +759,16 @@ def _card(pid: int, name: str, team: str, detail: str = "Yellow Card", minute: i
             "team": {"name": team}, "player": {"id": pid, "name": name}}
 
 
+# Un evento que no es tarjeta: todo partido real tiene al menos cambios.
+_SUBSTITUTION = {"time": {"elapsed": 60, "extra": None}, "type": "subst", "detail": "Substitution 1",
+                 "team": {"name": "Real Madrid"}, "player": {"id": 11, "name": "Bellingham"}}
+
+
+async def _cards_by_fixture() -> dict[int, list | None]:
+    async with TestSessionLocal() as session:
+        return dict((await session.execute(select(Match.api_fixture_id, Match.card_events))).all())
+
+
 async def _match_of(pred_id: int) -> Match:
     """El partido de la predicción con sus columnas diferidas (tarjetas y bajas) cargadas."""
     async with TestSessionLocal() as session:
@@ -892,7 +902,7 @@ async def test_card_backfill_retries_only_what_failed(monkeypatch):
         calls.append(fixture_id)
         if fixture_id in failing:
             raise ucl_api.ApiFootballError("rateLimit")
-        return []
+        return [_SUBSTITUTION]      # partido con eventos y sin tarjetas
 
     monkeypatch.setattr(ucl_api, "fetch_fixture_events", fake_fetch_events)
     await scheduler_module._do_backfill_card_events()
@@ -903,6 +913,85 @@ async def test_card_backfill_retries_only_what_failed(monkeypatch):
     async with TestSessionLocal() as session:
         saved = dict((await session.execute(select(Match.api_fixture_id, Match.card_events))).all())
     assert saved == {9101: [], 9102: []}
+
+
+@pytest.mark.asyncio
+async def test_card_backfill_does_not_trust_an_empty_events_response_of_a_recent_match(monkeypatch):
+    """Sin eventos no es "sin tarjetas": de un partido reciente significa que la API aún
+    no los publica. Queda pendiente y se reintenta; pasado el plazo de gracia se guarda
+    vacío para no preguntar siempre."""
+    monkeypatch.setattr(scheduler_module.settings, "API_REQUESTS_PER_MINUTE", 60_000)
+    await _add_match(9201, 1, 2, status=MatchStatus.FINISHED, days_ahead=-0.1)    # recién terminado
+    await _add_match(9202, 3, 4, status=MatchStatus.FINISHED, days_ahead=-10)     # fuera del plazo
+    responses: dict[int, list[list[dict]]] = {
+        9201: [[], [_SUBSTITUTION, _card(10, "Vinicius Jr", "T1")]],   # vacío y, después, completo
+        9202: [[]],
+    }
+    calls: list[int] = []
+
+    async def fake_fetch_events(fixture_id: int) -> list[dict]:
+        calls.append(fixture_id)
+        return responses[fixture_id].pop(0)
+
+    monkeypatch.setattr(ucl_api, "fetch_fixture_events", fake_fetch_events)
+
+    await scheduler_module._do_backfill_card_events()
+    assert await _cards_by_fixture() == {9201: None, 9202: []}       # el reciente sigue pendiente
+
+    await scheduler_module._do_backfill_card_events()
+    saved = await _cards_by_fixture()
+    assert [(c["player_id"], c["card"]) for c in saved[9201]] == [(10, "yellow")]
+    assert sorted(calls) == [9201, 9201, 9202]                       # el antiguo no se repite
+
+
+@pytest.mark.asyncio
+async def test_card_backfill_does_not_overwrite_cards_saved_meanwhile(monkeypatch):
+    """Si mientras el relleno espera a la API el job de eventos guarda las tarjetas del
+    partido, el relleno no las pisa con su foto (más antigua)."""
+    monkeypatch.setattr(scheduler_module.settings, "API_REQUESTS_PER_MINUTE", 60_000)
+    await _add_match(9301, 1, 2, status=MatchStatus.FINISHED, days_ahead=-1)
+    newer = [{"player_id": 10, "player": "Vinicius Jr", "team": "T1", "card": "yellow"},
+             {"player_id": 11, "player": "Bellingham", "team": "T1", "card": "red"}]
+
+    async def fake_fetch_events(fixture_id: int) -> list[dict]:
+        # Mientras "responde la API", otro job guarda una versión más reciente.
+        async with TestSessionLocal() as session:
+            match = (await session.execute(select(Match).where(Match.api_fixture_id == fixture_id))).scalar_one()
+            match.card_events = newer
+            await session.commit()
+        return [_SUBSTITUTION, _card(10, "Vinicius Jr", "T1")]      # foto anterior: solo una tarjeta
+
+    monkeypatch.setattr(ucl_api, "fetch_fixture_events", fake_fetch_events)
+    await scheduler_module._do_backfill_card_events()
+
+    assert (await _cards_by_fixture())[9301] == newer
+
+
+@pytest.mark.asyncio
+async def test_card_backfill_single_flight(monkeypatch):
+    """Con un relleno en curso, otra llamada se omite en vez de pedir a la API los mismos
+    partidos pendientes."""
+    monkeypatch.setattr(scheduler_module.settings, "API_REQUESTS_PER_MINUTE", 60_000)
+    await _add_match(9401, 1, 2, status=MatchStatus.FINISHED, days_ahead=-1)
+    started, release = asyncio.Event(), asyncio.Event()
+    calls: list[int] = []
+
+    async def slow_fetch_events(fixture_id: int) -> list[dict]:
+        calls.append(fixture_id)
+        started.set()
+        await release.wait()
+        return [_SUBSTITUTION]
+
+    monkeypatch.setattr(ucl_api, "fetch_fixture_events", slow_fetch_events)
+    first = asyncio.create_task(scheduler_module._do_backfill_card_events())
+    await started.wait()
+
+    await scheduler_module._do_backfill_card_events()     # se omite: ni espera ni duplica
+    assert calls == [9401]
+
+    release.set()
+    await first
+    assert (await _cards_by_fixture())[9401] == []
 
 
 # ── BAJAS POR PARTIDO (lesionados, sancionados, dudas) ───────────────────────

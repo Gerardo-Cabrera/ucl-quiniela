@@ -40,8 +40,13 @@ def suspended_for_match(team: str, match_id: int, schedule: Sequence[Any]) -> di
     `schedule`: TODOS los partidos de `team` en orden cronológico, del estado que sea,
     cada uno con `id`, `phase`, `status` y `card_events`. La sanción se cumple en el
     partido SIGUIENTE al de la tarjeta, así que solo se puede afirmar algo si el partido
-    inmediatamente anterior ya terminó y tiene sus tarjetas guardadas; si no (p. ej. se
-    consulta un partido de dentro de dos jornadas) no se marca a nadie."""
+    inmediatamente anterior (sin contar los aplazados) ya terminó y tiene sus tarjetas
+    guardadas; si no (p. ej. se consulta un partido de dentro de dos jornadas) no se
+    marca a nadie."""
+    # Un partido aplazado no se jugó: la sanción se cumple en el siguiente que sí se
+    # juegue, así que no cuenta como "el anterior" (el propio partido consultado se
+    # conserva aunque esté aplazado, para poder situarlo en el calendario).
+    schedule = [m for m in schedule if m.status != MatchStatus.POSTPONED or m.id == match_id]
     index = next((i for i, m in enumerate(schedule) if m.id == match_id), 0)
     if index == 0:
         return {}

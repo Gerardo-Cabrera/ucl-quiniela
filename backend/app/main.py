@@ -1,4 +1,4 @@
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from contextlib import asynccontextmanager
@@ -119,8 +119,14 @@ async def health():
     return {"status": "ok"}
 
 
+# Diagnóstico puntual, público y que toma una conexión del pool: unas pocas llamadas por
+# minuto e IP bastan (el límite global, 120/min, es para las vistas que refrescan solas).
+_HEALTH_DB_RATE_LIMIT = "10/minute"
+
+
 @app.get("/health/db", tags=["Health"])
-async def health_db(db: AsyncSession = Depends(get_db)):
+@limiter.limit(_HEALTH_DB_RATE_LIMIT)
+async def health_db(request: Request, db: AsyncSession = Depends(get_db)):
     """Comprueba la BD y mide lo que tarda UN viaje de ida y vuelta (un `SELECT 1`).
     Ese número multiplica el tiempo de cada petición (una hace varios viajes), así que
     es el dato para decidir si el backend y la BD están lo bastante cerca: unos pocos
