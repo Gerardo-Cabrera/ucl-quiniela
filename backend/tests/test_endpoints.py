@@ -1248,6 +1248,152 @@ async def test_match_players_search(auth_client: AsyncClient):
     assert (await auth_client.get(f"/api/matches/{match_id}/players?search=%25")).json() == []   # '%' literal
 
 
+# ── MARCAS DEL SELECTOR: goleadores, sancionados y bajas ─────────────────────
+
+
+def _scored(player_id: int, name: str, team: str) -> dict:
+    return {"player_id": player_id, "player": name, "assist_id": None, "assist": None, "team": team}
+
+
+def _booked(player_id: int, name: str, team: str, card: str = "yellow") -> dict:
+    return {"player_id": player_id, "player": name, "team": team, "card": card}
+
+
+async def _seed_player_form() -> int:
+    """Tres partidos jugados (goles y tarjetas) y el próximo Real Madrid-Barcelona con sus
+    bajas; devuelve el id del próximo. Goles: Vinicius 2, Bellingham 1, Lewandowski 1,
+    Lamine Yamal 1. Bellingham ve su 3.ª amarilla en el último partido del Madrid."""
+    now = datetime.now(timezone.utc)
+    await _create_match(
+        api_fixture_id=4001, status=MatchStatus.FINISHED, match_date=now - timedelta(days=9), home_score=2, away_score=1,
+        goal_events=[_scored(10, "Vinicius Jr", "Real Madrid"), _scored(11, "Bellingham", "Real Madrid"),
+                     _scored(20, "Lewandowski", "Barcelona")],
+        card_events=[_booked(11, "Bellingham", "Real Madrid"), _booked(20, "Lewandowski", "Barcelona")],
+    )
+    await _create_match(
+        api_fixture_id=4002, status=MatchStatus.FINISHED, match_date=now - timedelta(days=6),
+        home_team="Barcelona", away_team="Real Madrid", home_score=1, away_score=1,
+        goal_events=[_scored(21, "Lamine Yamal", "Barcelona"), _scored(10, "Vinicius Jr", "Real Madrid")],
+        card_events=[_booked(11, "Bellingham", "Real Madrid")],
+    )
+    await _create_match(
+        api_fixture_id=4003, status=MatchStatus.FINISHED, match_date=now - timedelta(days=3),
+        away_team="Arsenal", home_score=0, away_score=0, goal_events=[],
+        card_events=[_booked(11, "Bellingham", "Real Madrid")],
+    )
+    # Un partido de OTROS equipos no cuenta para estas plantillas.
+    await _create_match(
+        api_fixture_id=4009, status=MatchStatus.FINISHED, match_date=now - timedelta(days=3),
+        home_team="Liverpool", away_team="Inter Milan", home_score=1, away_score=0,
+        goal_events=[_scored(999, "Otro", "Liverpool")], card_events=[_booked(10, "Vinicius Jr", "Liverpool", card="red")],
+    )
+    return await _create_match(api_fixture_id=4004, absences=[
+        {"player_id": 10, "player": "Vinicius Jr", "team": "Real Madrid", "status": "injured", "reason": "Knee Injury"},
+        {"player_id": 11, "player": "Bellingham", "team": "Real Madrid", "status": "doubtful", "reason": "Injury"},
+        {"player_id": 20, "player": "Lewandowski", "team": "Barcelona", "status": "suspended", "reason": "Red Card"},
+        {"player_id": 21, "player": "Lamine Yamal", "team": "Barcelona", "status": "doubtful", "reason": "Illness"},
+        {"player_id": 555, "player": "No está en la plantilla", "team": "Barcelona", "status": "unavailable", "reason": "Off the roster"},
+    ])
+
+
+def _marks(players: dict, name: str) -> tuple:
+    p = players[name]
+    return p["goals"], p["team_top_scorer"], p["availability"], p["availability_reason"]
+
+
+@pytest.mark.asyncio
+async def test_match_players_carry_goals_and_availability(auth_client: AsyncClient):
+    match_id = await _seed_player_form()
+
+    resp = await auth_client.get(f"/api/matches/{match_id}/players")
+    assert resp.status_code == 200
+    players = {p["name"]: p for p in resp.json()}
+
+    assert set(players) == {"Vinicius Jr", "Bellingham", "Lewandowski", "Lamine Yamal"}
+    assert _marks(players, "Vinicius Jr") == (2, True, "injured", "Knee Injury")
+    # 3.ª amarilla en el partido anterior de su equipo: sancionado por reglamento. La API
+    # solo lo daba como duda; manda la sanción.
+    assert _marks(players, "Bellingham") == (1, False, "suspended", "Yellow Cards")
+    # Empate a 1 en el Barcelona: los dos son máximos goleadores de su equipo.
+    assert _marks(players, "Lewandowski") == (1, True, "suspended", "Red Card")   # sanción que da la API
+    assert _marks(players, "Lamine Yamal") == (1, True, "doubtful", "Illness")
+    # Lo que ya devolvía sigue igual, y no se exponen recuentos de tarjetas.
+    assert players["Vinicius Jr"]["team_name"] == "Real Madrid" and players["Vinicius Jr"]["position"] == "Attacker"
+    assert "yellow_cards" not in players["Bellingham"]
+
+
+@pytest.mark.asyncio
+async def test_card_suspension_applies_only_to_the_next_match(auth_client: AsyncClient):
+    """La sanción por tarjetas se cumple en el partido siguiente: en uno posterior, con
+    otro aún por jugar en medio, no se marca a nadie por reglamento."""
+    await _seed_player_form()
+    later = await _create_match(api_fixture_id=4005, match_date=datetime.now(timezone.utc) + timedelta(days=10))
+
+    players = {p["name"]: p for p in (await auth_client.get(f"/api/matches/{later}/players")).json()}
+    assert _marks(players, "Bellingham") == (1, False, None, None)
+    assert all(p["availability"] is None for p in players.values())   # sin bajas de la API para ese partido
+
+
+@pytest.mark.asyncio
+async def test_match_players_without_data_have_neutral_marks(auth_client: AsyncClient):
+    """Sin partidos jugados ni bajas sincronizadas: mismas plantillas, marcas en blanco."""
+    match_id = await _create_match()
+    players = (await auth_client.get(f"/api/matches/{match_id}/players")).json()
+    assert len(players) == 4
+    assert all((p["goals"], p["team_top_scorer"], p["availability"]) == (0, False, None) for p in players)
+
+
+@pytest.mark.asyncio
+async def test_match_players_search_keeps_the_marks(auth_client: AsyncClient):
+    """`?search=` filtra, pero el máximo goleador se decide con la plantilla completa."""
+    match_id = await _seed_player_form()
+    found = (await auth_client.get(f"/api/matches/{match_id}/players?search=belling")).json()
+    assert [(p["name"], p["goals"], p["team_top_scorer"], p["availability"]) for p in found] == [
+        ("Bellingham", 1, False, "suspended"),    # Vinicius (2 goles) no está en el resultado, pero cuenta
+    ]
+
+
+@pytest.mark.asyncio
+async def test_matches_list_does_not_carry_cards_or_absences(auth_client: AsyncClient):
+    """La lista que se refresca cada minuto no arrastra tarjetas ni bajas (columnas diferidas)."""
+    await _seed_player_form()
+    matches = (await auth_client.get("/api/matches/")).json()
+    assert len(matches) == 5
+    assert all("absences" not in m and "card_events" not in m for m in matches)
+
+
+@pytest.mark.asyncio
+async def test_tournament_players_carry_goals_and_team_top_scorer(auth_client: AsyncClient):
+    await _seed_player_form()
+    players = {p["name"]: p for p in (await auth_client.get("/api/tournament/players")).json()}
+    assert {n: (p["goals"], p["team_top_scorer"]) for n, p in players.items()} == {
+        "Vinicius Jr": (2, True), "Bellingham": (1, False),
+        "Lewandowski": (1, True), "Lamine Yamal": (1, True),
+    }
+    assert "availability" not in players["Vinicius Jr"]    # las bajas son de un partido concreto
+
+
+@pytest.mark.asyncio
+async def test_sync_absences_requires_admin(auth_client: AsyncClient):
+    assert (await auth_client.post("/api/matches/sync-absences")).status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_sync_absences_admin_triggers_job(admin_client: AsyncClient, monkeypatch):
+    """Admin: 202 y encola el job (sin tocar la API)."""
+    from app.routers import matches as matches_router
+
+    calls: list[bool] = []
+
+    async def fake_sync() -> None:
+        calls.append(True)
+
+    monkeypatch.setattr(matches_router, "sync_absences", fake_sync)
+    resp = await admin_client.post("/api/matches/sync-absences")
+    assert resp.status_code == 202
+    assert calls == [True]
+
+
 # ── ADMIN: SYNC DE PROBABILIDADES ────────────────────────────────────────────
 
 

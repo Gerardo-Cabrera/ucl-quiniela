@@ -73,6 +73,10 @@ class Settings(BaseSettings):
     # así para caber en el plan gratuito (~100 req/día) junto a los demás jobs.
     SYNC_PROBABILITIES_HOURS: int = 24
     PROBABILITIES_LOOKAHEAD_DAYS: int = 7
+    # Bajas (lesionados, sancionados, dudas): UNA petición a `/injuries` trae las de toda
+    # la competición. La API las actualiza cada pocas horas; el dato importa sobre todo
+    # la víspera y el día del partido.
+    SYNC_ABSENCES_HOURS: int = Field(default=4, gt=0)
     # Fallback: si un partido de fase de liga sigue LIVE pasados estos minutos desde
     # el kickoff, se da por finalizado (135 = 90' + descanso + añadido + margen). No
     # aplica a eliminatorias (prórroga/penales pueden superarlo).

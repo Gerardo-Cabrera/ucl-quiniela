@@ -17,6 +17,7 @@ from app.models.player import Player
 from app.models.top8_pick import Top8Pick
 from app.crud.app_state import app_state_crud
 from sqlalchemy import select
+from sqlalchemy.orm import undefer
 from app.services import scheduler as scheduler_module
 from app.services import ucl_api
 from tests.conftest import TestSessionLocal, SEED_TEAMS
@@ -748,3 +749,257 @@ async def test_sync_first_goals_corrects_on_finish(monkeypatch):
         match = await session.get(Match, pred.match_id)
     assert (match.first_goal_team, match.first_goal_player_id) == ("Barcelona", 20)
     assert [g["player_id"] for g in match.goal_events] == [20, 10]
+
+
+# ── TARJETAS POR PARTIDO (base de las sanciones del selector de goleador) ─────
+
+
+def _card(pid: int, name: str, team: str, detail: str = "Yellow Card", minute: int = 40) -> dict:
+    return {"time": {"elapsed": minute, "extra": None}, "type": "Card", "detail": detail,
+            "team": {"name": team}, "player": {"id": pid, "name": name}}
+
+
+async def _match_of(pred_id: int) -> Match:
+    """El partido de la predicción con sus columnas diferidas (tarjetas y bajas) cargadas."""
+    async with TestSessionLocal() as session:
+        pred = await session.get(Prediction, pred_id)
+        return (await session.execute(
+            select(Match).where(Match.id == pred.match_id)
+            .options(undefer(Match.card_events), undefer(Match.absences))
+        )).scalar_one()
+
+
+def test_parse_card_events_normalizes_and_orders():
+    events = [
+        _card(21, "Lamine Yamal", "Barcelona", "Red Card", minute=80),
+        _goal(10, "Vinicius Jr", "Real Madrid"),
+        _card(11, "Bellingham", "Real Madrid", "Yellow Card", minute=12),
+        _card(11, "Bellingham", "Real Madrid", "Second Yellow card", minute=70),
+    ]
+    assert ucl_api.parse_card_events(events) == [
+        {"player_id": 11, "player": "Bellingham", "team": "Real Madrid", "card": "yellow"},
+        {"player_id": 11, "player": "Bellingham", "team": "Real Madrid", "card": "second_yellow"},
+        {"player_id": 21, "player": "Lamine Yamal", "team": "Barcelona", "card": "red"},
+    ]
+
+
+@pytest.mark.asyncio
+async def test_sync_first_goals_stores_card_events_on_finish(monkeypatch):
+    """Al finalizar, la MISMA petición de eventos deja guardados el primer gol, los goles
+    y las tarjetas del partido."""
+    pred_id = await _seed(first_goal_resolved=False)
+    calls: list[int] = []
+
+    async def fake_fetch_events(fixture_id: int) -> list[dict]:
+        calls.append(fixture_id)
+        return [_goal(10, "Vinicius Jr", "Real Madrid"), _card(20, "Lewandowski", "Barcelona")]
+
+    monkeypatch.setattr(ucl_api, "fetch_fixture_events", fake_fetch_events)
+    await scheduler_module._do_sync_first_goals()
+
+    match = await _match_of(pred_id)
+    assert calls == [match.api_fixture_id]            # una sola petición para todo
+    assert match.first_goal_player_id == 10
+    assert [g["player_id"] for g in match.goal_events] == [10]
+    assert match.card_events == [
+        {"player_id": 20, "player": "Lewandowski", "team": "Barcelona", "card": "yellow"},
+    ]
+
+    await scheduler_module._do_sync_first_goals()     # todo resuelto: no se vuelve a pedir
+    assert len(calls) == 1
+
+
+@pytest.mark.asyncio
+async def test_card_backfill_leaves_goals_and_points_untouched(monkeypatch):
+    """Partido cerrado antes de existir las tarjetas (primer gol resuelto, goles
+    guardados, predicción puntuada): el relleno lo consulta UNA vez para guardar sus
+    tarjetas y NO toca ni el primer gol ni los puntos, aunque los eventos de hoy digan
+    otra cosa."""
+    monkeypatch.setattr(scheduler_module.settings, "API_REQUESTS_PER_MINUTE", 60_000)   # sin esperas
+    pred_id = await _seed(first_goal_resolved=True)   # primer gol: Vinicius (10)
+    async with TestSessionLocal() as session:
+        pred = await session.get(Prediction, pred_id)
+        pred.is_calculated = True
+        pred.points_earned = 16
+        match = await session.get(Match, pred.match_id)
+        match.goal_events = [{"player_id": 10, "player": "Vinicius Jr", "assist_id": None, "assist": None, "team": "Real Madrid"}]
+        await session.commit()
+    calls: list[int] = []
+
+    async def fake_fetch_events(fixture_id: int) -> list[dict]:
+        calls.append(fixture_id)
+        # La API atribuye ahora el primer gol a otro jugador: en un partido ya cerrado
+        # eso NO debe reabrir la puntuación.
+        return [_goal(20, "Lewandowski", "Barcelona", minute=5), _card(11, "Bellingham", "Real Madrid")]
+
+    monkeypatch.setattr(ucl_api, "fetch_fixture_events", fake_fetch_events)
+    await scheduler_module._do_sync_first_goals()         # ya resuelto: el job de eventos no lo consulta
+    assert calls == []
+    await scheduler_module._do_backfill_card_events()
+    await scheduler_module._do_backfill_card_events()     # ya tiene tarjetas: no se repite
+
+    assert len(calls) == 1
+    pred = await _get_prediction(pred_id)
+    assert pred.is_calculated is True and pred.points_earned == 16
+    match = await _match_of(pred_id)
+    assert (match.first_goal_team, match.first_goal_player_id) == ("Real Madrid", 10)
+    assert [g["player_id"] for g in match.goal_events] == [10]
+    assert [(c["player_id"], c["card"]) for c in match.card_events] == [(11, "yellow")]
+
+
+@pytest.mark.asyncio
+async def test_card_backfill_covers_goalless_finished_match(monkeypatch):
+    """Un 0-0 no tiene primer gol que buscar (el job de eventos no lo consulta), pero sí
+    tarjetas: el relleno lo pide una vez, solo cuando ya terminó."""
+    monkeypatch.setattr(scheduler_module.settings, "API_REQUESTS_PER_MINUTE", 60_000)
+    pred_id = await _seed(home_score=0, away_score=0)
+    live_id = None
+    async with TestSessionLocal() as session:     # otro 0-0, todavía en juego
+        live = Match(api_fixture_id=5002, home_team="Arsenal", away_team="Liverpool", home_score=0, away_score=0,
+                     phase=MatchPhase.LEAGUE, status=MatchStatus.LIVE, match_date=datetime.now(timezone.utc))
+        session.add(live)
+        await session.commit()
+        live_id = live.api_fixture_id
+    calls: list[int] = []
+
+    async def fake_fetch_events(fixture_id: int) -> list[dict]:
+        calls.append(fixture_id)
+        return [_card(10, "Vinicius Jr", "Real Madrid")]
+
+    monkeypatch.setattr(ucl_api, "fetch_fixture_events", fake_fetch_events)
+    await scheduler_module._do_sync_first_goals()
+    assert calls == []
+    await scheduler_module._do_backfill_card_events()
+    await scheduler_module._do_backfill_card_events()
+
+    match = await _match_of(pred_id)
+    assert calls == [match.api_fixture_id] and live_id not in calls
+    assert [(c["player_id"], c["card"]) for c in match.card_events] == [(10, "yellow")]
+    assert match.first_goal_team is None and match.goal_events is None   # como antes
+
+
+@pytest.mark.asyncio
+async def test_card_backfill_retries_only_what_failed(monkeypatch):
+    """Si la API corta alguna petición (límite por minuto), ese partido queda pendiente
+    y se reintenta en la siguiente corrida; los demás no se vuelven a pedir."""
+    monkeypatch.setattr(scheduler_module.settings, "API_REQUESTS_PER_MINUTE", 60_000)
+    await _add_match(9101, 1, 2, status=MatchStatus.FINISHED, days_ahead=-2)
+    await _add_match(9102, 3, 4, status=MatchStatus.FINISHED, days_ahead=-1)
+    calls: list[int] = []
+    failing = {9102}
+
+    async def fake_fetch_events(fixture_id: int) -> list[dict]:
+        calls.append(fixture_id)
+        if fixture_id in failing:
+            raise ucl_api.ApiFootballError("rateLimit")
+        return []
+
+    monkeypatch.setattr(ucl_api, "fetch_fixture_events", fake_fetch_events)
+    await scheduler_module._do_backfill_card_events()
+    failing.clear()
+    await scheduler_module._do_backfill_card_events()
+
+    assert calls == [9101, 9102, 9102]
+    async with TestSessionLocal() as session:
+        saved = dict((await session.execute(select(Match.api_fixture_id, Match.card_events))).all())
+    assert saved == {9101: [], 9102: []}
+
+
+# ── BAJAS POR PARTIDO (lesionados, sancionados, dudas) ───────────────────────
+
+
+def _absence(fixture_id: int, pid: int, name: str, team: str, reason: str, kind: str = "Missing Fixture") -> dict:
+    return {"player": {"id": pid, "name": name, "type": kind, "reason": reason},
+            "team": {"id": 1, "name": team}, "fixture": {"id": fixture_id}}
+
+
+@pytest.mark.parametrize("kind, reason, expected", [
+    ("Missing Fixture", "Knee Injury", "injured"),
+    ("Missing Fixture", "Illness", "injured"),
+    ("Missing Fixture", "Surgery", "injured"),
+    ("Missing Fixture", "Red Card", "suspended"),
+    ("Missing Fixture", "Yellow Cards", "suspended"),
+    ("Missing Fixture", "Suspended", "suspended"),
+    ("Questionable", "Muscle Injury", "doubtful"),
+    ("Missing Fixture", "Off the roster", "unavailable"),
+    ("Missing Fixture", "Coach's decision", "unavailable"),
+    ("Missing Fixture", "Rest", "unavailable"),
+    ("Missing Fixture", "International duty", "unavailable"),
+    ("Missing Fixture", "Chest Injury", "injured"),        # "rest" dentro de otra palabra no cuenta
+    ("Missing Fixture", None, "injured"),
+])
+def test_absence_status_classification(kind, reason, expected):
+    assert ucl_api.absence_status(kind, reason) == expected
+
+
+def test_parse_absences_groups_dedupes_and_prefers_the_firm_absence():
+    items = [
+        _absence(9001, 10, "Vinicius Jr", "Real Madrid", "Muscle Injury", kind="Questionable"),
+        _absence(9001, 10, "Vinicius Jr", "Real Madrid", "Muscle Injury"),      # repetido: gana la baja firme
+        _absence(9001, 20, "Lewandowski", "Barcelona", "Red Card"),
+        _absence(9001, 20, "Lewandowski", "Barcelona", "Red Card"),              # duplicado exacto
+        _absence(9002, 21, "Lamine Yamal", "Barcelona", "Off the roster"),
+        {"player": {"id": None, "name": "?"}, "team": {"name": "X"}, "fixture": {"id": 9002}},   # sin id: se descarta
+    ]
+    assert ucl_api.parse_absences(items) == {
+        9001: [
+            {"player_id": 20, "player": "Lewandowski", "team": "Barcelona", "status": "suspended", "reason": "Red Card"},
+            {"player_id": 10, "player": "Vinicius Jr", "team": "Real Madrid", "status": "injured", "reason": "Muscle Injury"},
+        ],
+        9002: [
+            {"player_id": 21, "player": "Lamine Yamal", "team": "Barcelona", "status": "unavailable", "reason": "Off the roster"},
+        ],
+    }
+
+
+async def _absences_by_fixture() -> dict[int, list | None]:
+    async with TestSessionLocal() as session:
+        rows = (await session.execute(select(Match.api_fixture_id, Match.absences))).all()
+    return dict(rows)
+
+
+@pytest.mark.asyncio
+async def test_sync_absences_replaces_pending_matches_and_skips_finished(monkeypatch):
+    await _add_match(9001, 1, 2, status=MatchStatus.SCHEDULED)
+    await _add_match(9002, 3, 4, status=MatchStatus.SCHEDULED)
+    await _add_match(9003, 5, 6, status=MatchStatus.FINISHED, days_ahead=-1)
+    responses = [
+        [_absence(9001, 10, "Vinicius Jr", "T1", "Knee Injury"),
+         _absence(9002, 20, "Lewandowski", "T3", "Red Card"),
+         _absence(9003, 21, "Lamine Yamal", "T5", "Illness")],
+        # Segunda corrida: Vinicius se recupera (ya no figura) y el 9002 sigue igual.
+        [_absence(9002, 20, "Lewandowski", "T3", "Red Card")],
+    ]
+
+    async def fake_fetch_absences() -> list[dict]:
+        return responses.pop(0)
+
+    monkeypatch.setattr(ucl_api, "fetch_absences", fake_fetch_absences)
+
+    await scheduler_module._do_sync_absences()
+    saved = await _absences_by_fixture()
+    assert [a["player_id"] for a in saved[9001]] == [10] and saved[9001][0]["status"] == "injured"
+    assert [(a["player_id"], a["status"]) for a in saved[9002]] == [(20, "suspended")]
+    assert saved[9003] is None                       # finalizado: no se toca
+
+    await scheduler_module._do_sync_absences()
+    saved = await _absences_by_fixture()
+    assert saved[9001] == []                         # recuperado: la lista se reemplaza
+    assert [a["player_id"] for a in saved[9002]] == [20]
+
+
+@pytest.mark.asyncio
+async def test_sync_absences_keeps_saved_when_api_returns_nothing(monkeypatch):
+    """Cero bajas en toda la competición es una respuesta anómala: no se borra lo guardado."""
+    await _add_match(9001, 1, 2, status=MatchStatus.SCHEDULED)
+    responses = [[_absence(9001, 10, "Vinicius Jr", "T1", "Knee Injury")], []]
+
+    async def fake_fetch_absences() -> list[dict]:
+        return responses.pop(0)
+
+    monkeypatch.setattr(ucl_api, "fetch_absences", fake_fetch_absences)
+    await scheduler_module._do_sync_absences()
+    await scheduler_module._do_sync_absences()
+
+    assert [a["player_id"] for a in (await _absences_by_fixture())[9001]] == [10]
+
