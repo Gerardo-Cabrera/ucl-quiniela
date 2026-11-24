@@ -71,10 +71,12 @@ export function PredictionModal({ match, prediction, onClose }: Props) {
       {/* Backdrop */}
       <div className="absolute inset-0 bg-ucl-navy/80 backdrop-blur-sm" onClick={onClose} />
 
-      {/* Modal: nunca más alto que la pantalla. Es una columna flex en la que solo cede
-          la cuadrícula de jugadores (se desplaza por dentro), así el botón de guardar
-          queda siempre a la vista; `overflow-y-auto` es el último recurso en pantallas
-          muy bajas, donde antes el modal quedaba cortado por arriba y por abajo. */}
+      {/* Modal: nunca más alto que la pantalla. Es una columna flex cuyos hijos directos
+          son todos los bloques del formulario (los contenedores intermedios van con
+          `contents`): ninguno puede encogerse por debajo de su contenido salvo la
+          cuadrícula de jugadores, que cede hasta su mínimo y se desplaza por dentro. Así
+          el botón de guardar queda a la vista, y si aun así no cabe (pantallas muy bajas)
+          se desplaza el modal entero en vez de montarse unos bloques sobre otros. */}
       <div className="relative w-full max-w-md max-h-[calc(100dvh-2rem)] overflow-y-auto flex flex-col card border-ucl-gold/25 p-6 shadow-2xl animate-in">
         {/* Close */}
         <button onClick={onClose} className="absolute top-4 right-4 text-ucl-silver/60 hover:text-ucl-white transition-colors">
@@ -105,14 +107,14 @@ export function PredictionModal({ match, prediction, onClose }: Props) {
 
         {/* First goal scorer: solo con goles en el marcador (y aun así opcional) */}
         {hasGoals && (
-        <div className="mb-6 min-h-0 flex flex-col">
-          <label className="block text-xs text-ucl-silver/70 mb-2 font-mono uppercase tracking-wider">
+        <div className="contents">
+          <label className="block shrink-0 text-xs text-ucl-silver/70 mb-2 font-mono uppercase tracking-wider">
             {t("predictionModal.firstScorer")}
           </label>
           {playersLoading ? (
-            <div className="flex items-center gap-2 text-ucl-silver/50 text-sm"><Spinner size="sm" /> {t("predictionModal.loadingPlayers")}</div>
+            <div className="mb-6 flex items-center gap-2 text-ucl-silver/50 text-sm"><Spinner size="sm" /> {t("predictionModal.loadingPlayers")}</div>
           ) : players.length === 0 ? (
-            <p className="text-ucl-silver/40 text-sm">{t("predictionModal.noSquads")}</p>
+            <p className="mb-6 text-ucl-silver/40 text-sm">{t("predictionModal.noSquads")}</p>
           ) : (
             <PlayerPicker
               players={players}

@@ -42,12 +42,13 @@ export function PlayerPicker({ players, teams, value, onChange }: Props) {
   const pool   = q ? players.filter((p) => p.name.toLowerCase().includes(q)) : players;
   const squads = groupSquad(pool, q ? teams.map((x) => x.name) : [team]);
 
-  // Columna flex: dentro del modal (de altura limitada) solo la cuadrícula cede y se
-  // desplaza; pestañas, filtro y leyenda quedan fijos.
+  // `contents`: los bloques del selector son hijos directos de la columna flex del modal.
+  // Solo la cuadrícula puede ceder altura (hasta su mínimo, con desplazamiento propio);
+  // el resto conserva la suya.
   return (
-    <div className="min-h-0 flex flex-col gap-3">
+    <div className="contents">
       {selected && (
-        <div className="flex items-center gap-2 text-sm">
+        <div className="mb-3 flex items-center gap-2 text-sm">
           <span className="text-ucl-silver/60">{t("predictionModal.picked")}</span>
           <span className="text-ucl-gold font-medium truncate">{selected.name}</span>
           <button
@@ -62,14 +63,14 @@ export function PlayerPicker({ players, teams, value, onChange }: Props) {
       )}
       {/* Elegir a una baja no se impide, pero se avisa (en móvil no hay tooltip). */}
       {selected?.availability && (
-        <p role="status" className={clsx("-mt-2 text-xs", availabilityTextClass(selected.availability))}>
+        <p role="status" className={clsx("-mt-2 mb-3 text-xs", availabilityTextClass(selected.availability))}>
           {t(isOut(selected) ? "playerMarks.pickedWarningOut" : "playerMarks.pickedWarningDoubt",
              { status: availabilityLabel(selected, t) })}
         </p>
       )}
 
       {/* Pestañas de equipo */}
-      <div className="grid grid-cols-2 gap-2">
+      <div className="mb-3 grid grid-cols-2 gap-2">
         {teams.map((tm) => (
           <button
             type="button"
@@ -89,7 +90,7 @@ export function PlayerPicker({ players, teams, value, onChange }: Props) {
       </div>
 
       {/* Filtro por nombre (opcional) */}
-      <div className="relative">
+      <div className="mb-3 relative">
         <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-ucl-silver/40" />
         <input
           type="text"
@@ -100,10 +101,10 @@ export function PlayerPicker({ players, teams, value, onChange }: Props) {
         />
       </div>
 
-      <PlayerLegend players={players} />
+      <PlayerLegend players={players} className="mb-3" />
 
       {/* Cuadrícula de fotos por posición */}
-      <div className="min-h-24 max-h-64 overflow-y-auto pr-1 space-y-3">
+      <div className="mb-6 min-h-24 max-h-64 overflow-y-auto pr-1 space-y-3">
         {squads.length === 0 && (
           <p className="text-sm text-ucl-silver/40 italic">{t("predictionModal.noMatches")}</p>
         )}
