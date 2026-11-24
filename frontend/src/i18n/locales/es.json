@@ -121,6 +121,7 @@
     "title": "Probabilidad de victoria (local · empate · visitante) según API-Football, actualizada el {{date}}"
   },
   "matchCard": {
+    "editAvailability": "Corregir bajas del partido (admin)",
     "yourPrediction": "Tu pronóstico:",
     "exact": "✓ Exacto",
     "predict": "Pronosticar",
@@ -266,6 +267,7 @@
     "editToggle": "Corregir bajas",
     "editHint": "Toca un jugador para corregir su estado en este partido.",
     "editTitle": "Estado de",
+    "editModalTitle": "Bajas del partido",
     "editReason": "Motivo (opcional), p. ej. lesión muscular",
     "editSave": "Guardar",
     "editClear": "Quitar corrección",

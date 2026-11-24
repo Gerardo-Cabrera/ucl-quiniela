@@ -20,10 +20,14 @@ interface TeamRef {
 interface Props {
   players: Player[];
   teams: [TeamRef, TeamRef];   // local, visitante
-  value: number | null;
-  onChange: (id: number | null) => void;
+  /** Goleador elegido y cómo cambiarlo. Se omiten en el modo `editOnly`. */
+  value?: number | null;
+  onChange?: (id: number | null) => void;
   /** Partido de estas plantillas: con él, el admin puede corregir a mano la disponibilidad. */
   matchId?: number;
+  /** Solo corregir bajas (modal de bajas del admin): no se elige goleador y tocar a un
+   *  jugador abre siempre su estado. */
+  editOnly?: boolean;
 }
 
 /** Selector visual del primer goleador: pestañas de equipo (con escudo), filtro
@@ -39,14 +43,17 @@ interface Props {
  *  (el dato puede ir con retraso); al hacerlo, el aviso queda junto al nombre.
  *
  *  Solo el admin ve además «Corregir bajas»: con ese modo activo, tocar a un jugador no
- *  lo elige como goleador sino que abre su estado para corregirlo (AvailabilityEditor). */
-export function PlayerPicker({ players, teams, value, onChange, matchId }: Props) {
+ *  lo elige como goleador sino que abre su estado para corregirlo (AvailabilityEditor).
+ *  Con `editOnly` (modal de bajas, abierto desde la tarjeta del partido) ese modo es el
+ *  único: no hay goleador que elegir. */
+export function PlayerPicker({ players, teams, value = null, onChange, matchId, editOnly = false }: Props) {
   const { t } = useTranslation();
   const isAdmin = useAuthStore((s) => s.user?.is_admin ?? false);
   const canEdit = isAdmin && matchId != null;
   const [team, setTeam]   = useState(teams[0].name);
   const [query, setQuery] = useState("");
-  const [editing, setEditing] = useState(false);              // modo «Corregir bajas» (admin)
+  const [editToggle, setEditToggle] = useState(false);        // modo «Corregir bajas» (admin)
+  const editing = editOnly || editToggle;
   const [targetId, setTargetId] = useState<number | null>(null);
   const target = players.find((p) => p.api_player_id === targetId);
   const q = query.trim().toLowerCase();
@@ -67,7 +74,7 @@ export function PlayerPicker({ players, teams, value, onChange, matchId }: Props
           <span className="text-ucl-gold font-medium truncate">{selected.name}</span>
           <button
             type="button"
-            onClick={() => onChange(null)}
+            onClick={() => onChange?.(null)}
             aria-label={t("common.close")}
             className="text-ucl-silver/50 hover:text-red-400 transition-colors"
           >
@@ -119,18 +126,20 @@ export function PlayerPicker({ players, teams, value, onChange, matchId }: Props
 
       {canEdit && (
         <div className="mb-3 flex items-center gap-2">
-          <button
-            type="button"
-            aria-pressed={editing}
-            onClick={() => { setEditing((on) => !on); setTargetId(null); }}
-            className={clsx(
-              "inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-3 py-1 text-xs transition-colors",
-              editing ? "border-ucl-gold bg-ucl-gold/10 text-ucl-gold"
-                      : "border-ucl-blue/60 text-ucl-silver hover:border-ucl-gold/60",
-            )}
-          >
-            <Pencil size={12} /> {t("playerMarks.editToggle")}
-          </button>
+          {!editOnly && (
+            <button
+              type="button"
+              aria-pressed={editing}
+              onClick={() => { setEditToggle((on) => !on); setTargetId(null); }}
+              className={clsx(
+                "inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-3 py-1 text-xs transition-colors",
+                editing ? "border-ucl-gold bg-ucl-gold/10 text-ucl-gold"
+                        : "border-ucl-blue/60 text-ucl-silver hover:border-ucl-gold/60",
+              )}
+            >
+              <Pencil size={12} /> {t("playerMarks.editToggle")}
+            </button>
+          )}
           {editing && !target && <span className="min-w-0 text-[11px] leading-tight text-ucl-silver/60">{t("playerMarks.editHint")}</span>}
         </div>
       )}
@@ -170,7 +179,7 @@ export function PlayerPicker({ players, teams, value, onChange, matchId }: Props
                         title={notes}
                         onClick={() => (editing && canEdit
                           ? setTargetId(p.api_player_id)
-                          : onChange(isSelected ? null : p.api_player_id))}
+                          : onChange?.(isSelected ? null : p.api_player_id))}
                         className={clsx(
                           "flex flex-col items-center gap-1 rounded-lg p-1.5 min-w-0 transition-colors",
                           isSelected ? "bg-ucl-gold/15" : "hover:bg-ucl-blue/30",

@@ -1,6 +1,6 @@
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import { Pencil } from "lucide-react";
+import { Pencil, Stethoscope } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import type { Match, Prediction } from "@/types";
@@ -13,6 +13,9 @@ interface MatchCardProps {
   match: Match;
   prediction?: Prediction;
   onPredict?: (match: Match) => void;
+  /** Solo admin: abrir las bajas del partido para corregirlas. No depende del plazo de
+   *  pronósticos ni del marcador (va en la cabecera, no junto al botón de pronosticar). */
+  onEditAvailability?: (match: Match) => void;
   /** Reservar el hueco de la barra de probabilidad / del primer gol real aunque este
    *  partido no los tenga: la cuadrícula lo pide cuando otra tarjeta del mismo día sí
    *  los muestra, para que todas mantengan cada bloque al mismo nivel. */
@@ -45,7 +48,7 @@ function liveClock(match: Match, t: TFunction): string | null {
   return `${match.elapsed}${match.elapsed_extra ? `+${match.elapsed_extra}` : ""}′`;
 }
 
-export function MatchCard({ match, prediction, onPredict, reserveProbability, reserveFirstGoal }: MatchCardProps) {
+export function MatchCard({ match, prediction, onPredict, onEditAvailability, reserveProbability, reserveFirstGoal }: MatchCardProps) {
   const { t } = useTranslation();
   const isFinished  = match.status === "finished";
   const canPredict  = match.predictable;   // plazo de jornada + prórroga (backend)
@@ -72,7 +75,19 @@ export function MatchCard({ match, prediction, onPredict, reserveProbability, re
         <Badge variant={match.phase === "league" ? "blue" : "gold"}>
           {t(`phase.${match.phase}`)}
         </Badge>
-        <StatusDot status={match.status} />
+        <span className="flex items-center gap-2">
+          {onEditAvailability && (
+            <button
+              onClick={() => onEditAvailability(match)}
+              className="-my-1 p-1 text-ucl-silver/40 hover:text-ucl-gold transition-colors"
+              title={t("matchCard.editAvailability")}
+              aria-label={t("matchCard.editAvailability")}
+            >
+              <Stethoscope size={14} />
+            </button>
+          )}
+          <StatusDot status={match.status} />
+        </span>
       </div>
 
       {/* Teams + Score. mb-4 = gap mínimo fijo hasta el pie; el pie usa mt-auto para

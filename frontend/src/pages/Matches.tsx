@@ -4,6 +4,7 @@ import { useMatches, useMyPredictions, usePredictionOverride, useSetPredictionOv
 import { useAuthStore } from "@/store/authStore";
 import { MatchCard } from "@/components/MatchCard";
 import { PredictionModal } from "@/components/PredictionModal";
+import { AvailabilityModal } from "@/components/AvailabilityModal";
 import { Spinner, EmptyState, DayHeader, Pills } from "@/components/ui";
 import { groupByDay } from "@/lib/date";
 import { MATCH_PHASES, type Match, type MatchPhase, type MatchStatus } from "@/types";
@@ -60,6 +61,9 @@ export default function MatchesPage() {
   // Al elegir un filtro a mano, se respeta.
   const [statusChoice, setStatusChoice] = useState<MatchStatus | "all" | null>(null);
   const [selected, setSelected] = useState<Match | null>(null);
+  // Admin: bajas de un partido (corregir a mano lo que el proveedor aún no registra).
+  const isAdmin = useAuthStore((s) => s.user?.is_admin ?? false);
+  const [availabilityFor, setAvailabilityFor] = useState<Match | null>(null);
 
   // Una sola consulta (compartida con otras vistas); el filtrado es en cliente.
   const { data: allMatches, isLoading } = useMatches();
@@ -123,6 +127,7 @@ export default function MatchesPage() {
                       match={match}
                       prediction={predictionByMatch[match.id]}
                       onPredict={setSelected}
+                      onEditAvailability={isAdmin && match.status !== "finished" ? setAvailabilityFor : undefined}
                       reserveProbability={reserveProbability}
                       reserveFirstGoal={reserveFirstGoal}
                     />
@@ -132,6 +137,10 @@ export default function MatchesPage() {
             );
           })}
         </div>
+      )}
+
+      {availabilityFor && (
+        <AvailabilityModal match={availabilityFor} onClose={() => setAvailabilityFor(null)} />
       )}
 
       {selected && (
