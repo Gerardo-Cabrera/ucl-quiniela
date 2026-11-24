@@ -1,6 +1,6 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import joinedload
 from app.models.prediction import Prediction
 
 
@@ -11,7 +11,9 @@ class PredictionCRUD:
         query = (
             select(Prediction)
             .where(Prediction.user_id == user_id)
-            .options(selectinload(Prediction.match))
+            # many-to-one: el partido viaja en la misma consulta (JOIN) en vez de en
+            # una segunda (selectinload), que era otro viaje a la BD por petición.
+            .options(joinedload(Prediction.match, innerjoin=True))
             .order_by(Prediction.created_at.desc())
         )
         # None = todas (mis pronósticos); un set = solo esos (revelar los de otro).

@@ -1,8 +1,23 @@
+from collections.abc import Iterable
 from datetime import date, datetime, timezone, tzinfo
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import and_, func, or_, select
 from app.models.match import Match, MatchPhase, MatchStatus
 from app.core.time import as_utc, tz_day
+
+
+def first_kickoffs_by_day(match_dates: Iterable[datetime], tz: tzinfo) -> dict[date, datetime]:
+    """Hora (UTC-aware) del PRIMER partido de cada jornada (día en la zona del torneo)
+    a partir de las fechas de los partidos. Regla pura, sin BD: la comparten la consulta
+    `MatchCRUD.day_first_kickoffs` y quien ya tiene TODOS los partidos cargados (la
+    lista de `/matches`), que así no repite la consulta."""
+    firsts: dict[date, datetime] = {}
+    for match_date in match_dates:
+        md = as_utc(match_date)
+        day = tz_day(match_date, tz)
+        if day not in firsts or md < firsts[day]:
+            firsts[day] = md
+    return firsts
 
 
 class MatchCRUD:
@@ -45,13 +60,7 @@ class MatchCRUD:
         Python: sirve para el plazo de pronósticos sin N+1. Considera TODOS los
         partidos del día, no solo los filtrados, para no perder el kickoff real."""
         result = await db.execute(select(Match.match_date))
-        firsts: dict[date, datetime] = {}
-        for (match_date,) in result.all():
-            md = as_utc(match_date)
-            day = tz_day(match_date, tz)
-            if day not in firsts or md < firsts[day]:
-                firsts[day] = md
-        return firsts
+        return first_kickoffs_by_day(result.scalars(), tz)
 
     async def started_day_match_ids(self, db: AsyncSession, tz: tzinfo) -> set[int]:
         """IDs de los partidos de toda jornada ya INICIADA (su primer partido, en

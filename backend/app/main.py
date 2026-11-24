@@ -1,13 +1,16 @@
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from contextlib import asynccontextmanager
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.core.logging import setup_logging
 from app.core.rate_limit import limiter
+from app.database import get_db
 from app.routers import (
     auth_router,
     matches_router,
@@ -24,6 +27,7 @@ from app.services.ucl_api import close_client
 from app.core.migrations import run_migrations
 import asyncio
 import logging
+import time
 
 setup_logging()
 logger = logging.getLogger(__name__)
@@ -73,6 +77,12 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    # El frontend vive en otro origen y cada petición lleva Authorization, así que el
+    # navegador hace antes un preflight (OPTIONS) por URL y lo cachea este tiempo. Con
+    # los 10 min por defecto, una vista que refresca cada minuto repetía el preflight
+    # (un viaje extra al servidor) una de cada diez veces; 2 h es el tope que respeta
+    # Chrome (Firefox admite más).
+    max_age=7200,
 )
 
 # Rutas
@@ -100,3 +110,16 @@ async def root():
 @app.get("/health", tags=["Health"])
 async def health():
     return {"status": "ok"}
+
+
+@app.get("/health/db", tags=["Health"])
+async def health_db(db: AsyncSession = Depends(get_db)):
+    """Comprueba la BD y mide lo que tarda UN viaje de ida y vuelta (un `SELECT 1`).
+    Ese número multiplica el tiempo de cada petición (una hace varios viajes), así que
+    es el dato para decidir si el backend y la BD están lo bastante cerca: unos pocos
+    ms en la misma región, decenas si están en regiones distintas. `/health` sigue sin
+    tocar la BD: es el que deben usar el keep-alive y los monitores."""
+    await db.execute(text("SELECT 1"))   # calienta: conexión del pool y sentencia preparada
+    start = time.perf_counter()
+    await db.execute(text("SELECT 1"))
+    return {"status": "ok", "db_roundtrip_ms": round((time.perf_counter() - start) * 1000, 1)}

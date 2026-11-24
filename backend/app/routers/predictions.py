@@ -107,7 +107,10 @@ async def create_or_update_prediction(
         first_goal_player_id=fg_player_id,
         first_goal_player=fg_player_name,
     )
-    await annotate_predictable(db, [prediction.match], _TOURNAMENT_TZ)
+    # `ensure_predictable` acaba de validar la ventana con la misma regla que anota el
+    # flag: si llegó hasta aquí el partido es pronosticable. Volver a calcularlo eran
+    # dos consultas más (interruptor + kickoffs) en cada guardado.
+    prediction.match.predictable = True
     return prediction
 
 

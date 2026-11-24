@@ -10,17 +10,20 @@
 from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
+from contextlib import contextmanager
+
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import event, select
 
 from app.config import settings
 from app.core.time import tz_day
 from app.models.match import Match, MatchPhase, MatchStatus
 from app.models.prediction import Prediction
 from app.models.user import User
-from app.services.prediction_window import _limit, _predictable
-from app.crud import match_crud
-from tests.conftest import TestSessionLocal
+from app.services.prediction_window import _limit, _predictable, annotate_predictable
+from app.crud import app_state_crud, match_crud
+from tests.conftest import TestSessionLocal, engine_test
 
 _MADRID = ZoneInfo("Europe/Madrid")
 _LEAD = settings.PREDICTION_LEAD_MINUTES
@@ -82,6 +85,86 @@ async def test_day_first_kickoffs_earliest_per_day():
     assert firsts[date(2027, 2, 17)] == datetime(2027, 2, 17, 20, 0, tzinfo=timezone.utc)
 
 
+# ── Anotar `predictable` sin consultas de más ────────────────────────────────
+
+@contextmanager
+def _count_selects():
+    """Cuenta los SELECT que llegan a la BD de test (cada uno es un viaje en producción)."""
+    statements: list[str] = []
+
+    def record(conn, cursor, statement, parameters, context, executemany):
+        if statement.lstrip().upper().startswith("SELECT"):
+            statements.append(statement)
+
+    event.listen(engine_test.sync_engine, "before_cursor_execute", record)
+    try:
+        yield statements
+    finally:
+        event.remove(engine_test.sync_engine, "before_cursor_execute", record)
+
+
+async def _annotated(*, complete: bool, only_ids: set[int] | None = None) -> tuple[dict[int, bool], int]:
+    """`predictable` por id tras anotar los partidos pedidos y cuántos SELECT costó."""
+    async with TestSessionLocal() as session:
+        query = select(Match).order_by(Match.match_date)
+        if only_ids is not None:
+            query = query.where(Match.id.in_(only_ids))
+        matches = list((await session.execute(query)).scalars())
+        with _count_selects() as selects:
+            await annotate_predictable(session, matches, _MADRID, complete=complete)
+        return {m.id: m.predictable for m in matches}, len(selects)
+
+
+@pytest.mark.asyncio
+async def test_annotate_complete_list_skips_the_kickoffs_query():
+    now = datetime.now(timezone.utc)
+    # Dos días: uno holgado y otro cuyo primer partido está dentro del plazo (cerrado
+    # para todo el día, también para el partido posterior de ese mismo día).
+    open_ = await _create_match(api_fixture_id=1, match_date=now + timedelta(days=3))
+    first = await _create_match(api_fixture_id=2, match_date=now + timedelta(minutes=30))
+    later = await _create_match(api_fixture_id=3, match_date=now + timedelta(minutes=45))
+    async with TestSessionLocal() as session:   # la fila del interruptor ya existe en prod
+        await app_state_crud.get(session)
+        await session.commit()
+
+    by_query, selects_query = await _annotated(complete=False)
+    by_list, selects_list = await _annotated(complete=True)
+
+    assert by_list == by_query == {open_: True, first: False, later: False}
+    assert selects_query == 2   # interruptor + kickoffs
+    assert selects_list == 1    # solo el interruptor: los kickoffs salen de la lista
+
+
+@pytest.mark.asyncio
+async def test_annotate_partial_list_still_asks_for_the_real_first_kickoff():
+    now = datetime.now(timezone.utc)
+    # El primer partido del día está dentro del plazo: la jornada entera ya cerró,
+    # también para un partido de ese día al que por sí solo le sobraría tiempo.
+    await _create_match(api_fixture_id=1, match_date=now + timedelta(minutes=30))
+    later = await _create_match(api_fixture_id=2, match_date=now + timedelta(hours=3))
+    same_day = tz_day(now + timedelta(minutes=30), _MADRID) == tz_day(now + timedelta(hours=3), _MADRID)
+
+    # Lista parcial (solo el tardío): el primer kickoff real se consulta; deducirlo de
+    # la lista lo daría por abierto.
+    flags, selects = await _annotated(complete=False, only_ids={later})
+
+    assert flags == {later: not same_day}
+    assert selects == 2
+
+
+@pytest.mark.asyncio
+async def test_annotate_without_scheduled_matches_runs_no_query():
+    finished = await _create_match(
+        api_fixture_id=1, status=MatchStatus.FINISHED,
+        match_date=datetime.now(timezone.utc) - timedelta(days=1),
+    )
+
+    flags, selects = await _annotated(complete=False)
+
+    assert flags == {finished: False}
+    assert selects == 0
+
+
 # ── CRUD: partidos de jornadas ya iniciadas ──────────────────────────────────
 
 @pytest.mark.asyncio
@@ -114,6 +197,21 @@ async def test_matches_expose_predictable(auth_client: AsyncClient):
     matches = {m["id"]: m for m in (await auth_client.get("/api/matches/")).json()}
     assert matches[future]["predictable"] is True      # holgado
     assert matches[within]["predictable"] is False     # dentro del plazo (lead)
+
+
+@pytest.mark.asyncio
+async def test_saved_prediction_returns_its_match_as_predictable(auth_client: AsyncClient):
+    """El POST solo llega a guardar si la ventana está abierta: la respuesta lo refleja
+    sin volver a consultar el interruptor ni los kickoffs."""
+    future = await _create_match(match_date=datetime.now(timezone.utc) + timedelta(days=2))
+    resp = await auth_client.post("/api/predictions/", json={
+        "match_id": future, "predicted_home": 1, "predicted_away": 0,
+    })
+    assert resp.status_code == 201
+    assert resp.json()["match"]["predictable"] is True
+    # Y coincide con lo que anota la lista de partidos.
+    matches = {m["id"]: m for m in (await auth_client.get("/api/matches/")).json()}
+    assert matches[future]["predictable"] is True
 
 
 @pytest.mark.asyncio

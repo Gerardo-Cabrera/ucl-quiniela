@@ -1315,3 +1315,27 @@ async def test_health(client: AsyncClient):
     resp = await client.get("/health")
     assert resp.status_code == 200
     assert resp.json()["status"] == "ok"
+
+
+@pytest.mark.asyncio
+async def test_health_db_reports_the_roundtrip(client: AsyncClient):
+    """`/health/db` sí toca la BD y devuelve lo que tarda un viaje (dato para decidir si
+    backend y BD están lo bastante cerca); `/health` sigue sin tocarla."""
+    resp = await client.get("/health/db")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["status"] == "ok"
+    assert isinstance(body["db_roundtrip_ms"], float) and body["db_roundtrip_ms"] >= 0
+
+
+@pytest.mark.asyncio
+async def test_cors_preflight_is_cached_for_two_hours(client: AsyncClient):
+    """El navegador repite el preflight (un viaje más por URL) cuando caduca su caché:
+    se le pide que lo conserve 2 h en vez de los 10 min por defecto."""
+    resp = await client.options("/api/matches/", headers={
+        "Origin": "http://localhost:5173",
+        "Access-Control-Request-Method": "GET",
+        "Access-Control-Request-Headers": "authorization",
+    })
+    assert resp.status_code == 200
+    assert resp.headers["access-control-max-age"] == "7200"

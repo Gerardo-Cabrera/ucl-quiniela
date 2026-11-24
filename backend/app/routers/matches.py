@@ -26,7 +26,11 @@ async def get_matches(
     _: User = Depends(get_current_user),
 ):
     matches = await match_crud.get_all(db, phase=phase, status=status)
-    await annotate_predictable(db, matches, _TOURNAMENT_TZ)
+    # Sin filtros la lista es completa (lo que pide el frontend, cada minuto): el primer
+    # partido de cada día sale de ella y se ahorra una consulta.
+    await annotate_predictable(
+        db, matches, _TOURNAMENT_TZ, complete=phase is None and status is None
+    )
     return matches
 
 
