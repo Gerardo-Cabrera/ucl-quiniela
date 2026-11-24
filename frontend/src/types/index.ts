@@ -60,12 +60,21 @@ export interface PredictionOverride {
   lead_minutes: number;   // plazo normal: minutos antes del 1er partido del día
 }
 
+/** Baja o duda de un jugador para un partido (bajas de API-Football). */
+export type PlayerAvailability = "injured" | "suspended" | "doubtful" | "unavailable";
+
 export interface Player {
   api_player_id: number;
   name: string;
   team_name: string;
   position: string | null;
   photo: string | null;
+  // Marcas para elegir (las calcula el backend). Opcionales: una respuesta en caché o
+  // de un backend anterior no las trae, y entonces simplemente no se pinta ninguna.
+  goals?: number;                  // goles en esta Champions (fase de liga en adelante)
+  team_top_scorer?: boolean;       // máximo goleador de su equipo (≥1 gol; empatados, todos)
+  availability?: PlayerAvailability | null;   // baja para ESE partido (solo plantillas de un partido)
+  availability_reason?: string | null;        // motivo en el vocabulario de la API (se traduce: absenceReason.*)
 }
 
 export interface Prediction {

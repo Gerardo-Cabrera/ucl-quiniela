@@ -91,7 +91,9 @@ export const useMatchPlayers = (matchId: number) =>
     queryKey: ["matches", matchId, "players"],
     queryFn:  () => matchesApi.getPlayers(matchId),
     enabled:  !!matchId,
-    staleTime: 1000 * 60 * 60, // las plantillas casi no cambian: cachear 1 h
+    // La plantilla casi no cambia, pero trae las bajas del partido (sancionados,
+    // lesionados, dudas), que el backend refresca cada pocas horas: 10 min de caché.
+    staleTime: 1000 * 60 * 10,
   });
 
 // ── PREDICTIONS ───────────────────────────────────────────────────────────────
