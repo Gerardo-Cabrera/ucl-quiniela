@@ -92,9 +92,12 @@ export const useMatchPlayers = (matchId: number) =>
     queryKey: ["matches", matchId, "players"],
     queryFn:  () => matchesApi.getPlayers(matchId),
     enabled:  !!matchId,
-    // La plantilla casi no cambia, pero trae las bajas del partido (sancionados,
-    // lesionados, dudas), que el backend refresca cada pocas horas: 10 min de caché.
-    staleTime: 1000 * 60 * 10,
+    // La plantilla casi no cambia, pero trae las bajas del partido, y el admin puede
+    // corregirlas en el último momento: se da por vieja al minuto y, mientras el selector
+    // esté abierto, se refresca cada minuto (como el resto de vistas vivas), para que una
+    // corrección llegue a quien ya lo tenía abierto sin cerrar y volver a abrir.
+    staleTime: 60_000,
+    refetchInterval: 60_000,
   });
 
 // Admin: corrección manual de la disponibilidad de un jugador. La respuesta trae las
