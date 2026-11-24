@@ -1,6 +1,6 @@
 import asyncio
 from logging.config import fileConfig
-from sqlalchemy import pool
+from sqlalchemy import pool, text
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 from alembic import context
@@ -33,9 +33,22 @@ def run_migrations_offline() -> None:
         context.run_migrations()
 
 
+# Clave del candado de migraciones (arbitraria, fija; "UCL" en ASCII).
+_MIGRATION_LOCK_KEY = 0x55434C
+
+
 def do_run_migrations(connection: Connection) -> None:
     context.configure(connection=connection, target_metadata=target_metadata)
     with context.begin_transaction():
+        # Cada instancia aplica las migraciones al arrancar, y puede haber más de una
+        # contra la misma BD (dos servicios, o un despliegue que arranca la versión nueva
+        # con la anterior aún viva). Sin esto, dos arranques simultáneos leen la misma
+        # revisión, ambos intentan el mismo ALTER TABLE y el segundo falla y aborta su
+        # inicio. El candado (de transacción: se suelta solo al terminar) las pone en
+        # fila ANTES de que Alembic lea la revisión actual: la segunda espera y, cuando
+        # entra, ya no tiene nada que aplicar.
+        if connection.dialect.name == "postgresql":
+            connection.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": _MIGRATION_LOCK_KEY})
         context.run_migrations()
 
 
