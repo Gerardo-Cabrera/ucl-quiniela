@@ -1359,7 +1359,7 @@ async def test_matches_list_does_not_carry_cards_or_absences(auth_client: AsyncC
     await _seed_player_form()
     matches = (await auth_client.get("/api/matches/")).json()
     assert len(matches) == 5
-    assert all("absences" not in m and "card_events" not in m for m in matches)
+    assert all("absences" not in m and "card_events" not in m and "manual_absences" not in m for m in matches)
 
 
 @pytest.mark.asyncio
@@ -1371,6 +1371,87 @@ async def test_tournament_players_carry_goals_and_team_top_scorer(auth_client: A
         "Lewandowski": (1, True), "Lamine Yamal": (1, True),
     }
     assert "availability" not in players["Vinicius Jr"]    # las bajas son de un partido concreto
+
+
+# ── CORRECCIÓN MANUAL DE LA DISPONIBILIDAD (admin) ───────────────────────────
+
+
+def _availability(players: list[dict]) -> dict[str, tuple]:
+    return {p["name"]: (p["availability"], p["availability_reason"], p["availability_manual"]) for p in players}
+
+
+@pytest.mark.asyncio
+async def test_manual_availability_requires_admin(auth_client: AsyncClient):
+    match_id = await _create_match()
+    url = f"/api/matches/{match_id}/players/10/availability"
+    assert (await auth_client.put(url, json={"status": "injured"})).status_code == 403
+    assert (await auth_client.delete(url)).status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_admin_marks_a_player_the_provider_has_not_reported(admin_client: AsyncClient, monkeypatch):
+    """El proveedor aún no da de baja a un jugador que ya se sabe lesionado: el admin lo
+    marca, la marca sobrevive al job de bajas, se puede cambiar y se puede quitar."""
+    monkeypatch.setattr(scheduler_module, "AsyncSessionLocal", TestSessionLocal)
+    match_id = await _create_match()
+    url = f"/api/matches/{match_id}/players/10/availability"
+
+    resp = await admin_client.put(url, json={"status": "injured", "reason": "  lesión muscular  "})
+    assert resp.status_code == 200
+    marks = _availability(resp.json())
+    assert marks["Vinicius Jr"] == ("injured", "lesión muscular", True)
+    assert marks["Bellingham"] == (None, None, False)
+
+    # El job de bajas reemplaza las de la API, no la corrección del admin.
+    async def fake_fetch_absences() -> list[dict]:
+        return [{"player": {"id": 20, "name": "Lewandowski", "type": "Missing Fixture", "reason": "Knee Injury"},
+                 "team": {"id": 529, "name": "Barcelona"}, "fixture": {"id": 1001}}]
+
+    monkeypatch.setattr(ucl_api, "fetch_absences", fake_fetch_absences)
+    await scheduler_module._do_sync_absences()
+    marks = _availability((await admin_client.get(f"/api/matches/{match_id}/players")).json())
+    assert marks["Vinicius Jr"] == ("injured", "lesión muscular", True)
+    assert marks["Lewandowski"] == ("injured", "Knee Injury", False)
+
+    # Una corrección por jugador: la nueva sustituye a la anterior (motivo en blanco = sin motivo).
+    marks = _availability((await admin_client.put(url, json={"status": "doubtful", "reason": " "})).json())
+    assert marks["Vinicius Jr"] == ("doubtful", None, True)
+
+    marks = _availability((await admin_client.delete(url)).json())
+    assert marks["Vinicius Jr"] == (None, None, False)
+    assert marks["Lewandowski"] == ("injured", "Knee Injury", False)     # lo automático sigue
+
+
+@pytest.mark.asyncio
+async def test_admin_can_overrule_an_automatic_absence(admin_client: AsyncClient):
+    """`available` desmiente una baja, venga de la API o de las tarjetas; al quitar la
+    corrección vuelve lo automático."""
+    match_id = await _seed_player_form()
+
+    async def mark(player_id: int, body: dict) -> dict:
+        resp = await admin_client.put(f"/api/matches/{match_id}/players/{player_id}/availability", json=body)
+        assert resp.status_code == 200
+        return _availability(resp.json())
+
+    assert (await mark(20, {"status": "available"}))["Lewandowski"] == (None, None, True)      # la API lo daba sancionado
+    marks = await mark(11, {"status": "available"})                                            # sancionado por 3.ª amarilla
+    assert marks["Bellingham"] == (None, None, True)
+    assert marks["Vinicius Jr"] == ("injured", "Knee Injury", False)                           # los demás, intactos
+
+    marks = _availability((await admin_client.delete(f"/api/matches/{match_id}/players/11/availability")).json())
+    assert marks["Bellingham"] == ("suspended", "Yellow Cards", False)
+    assert marks["Lewandowski"] == (None, None, True)
+
+
+@pytest.mark.asyncio
+async def test_manual_availability_validates_its_input(admin_client: AsyncClient):
+    match_id = await _create_match()
+    base = f"/api/matches/{match_id}/players"
+    assert (await admin_client.put("/api/matches/99999/players/10/availability", json={"status": "injured"})).status_code == 404
+    assert (await admin_client.put(f"{base}/999/availability", json={"status": "injured"})).status_code == 400   # no juega este partido
+    assert (await admin_client.delete(f"{base}/999/availability")).status_code == 400
+    assert (await admin_client.put(f"{base}/10/availability", json={"status": "lesionado"})).status_code == 422
+    assert (await admin_client.put(f"{base}/10/availability", json={"status": "injured", "reason": "x" * 81})).status_code == 422
 
 
 @pytest.mark.asyncio

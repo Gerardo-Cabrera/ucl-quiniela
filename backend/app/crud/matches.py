@@ -40,13 +40,25 @@ class MatchCRUD:
     async def get_by_id(
         self, db: AsyncSession, match_id: int, *, with_absences: bool = False
     ) -> Match | None:
-        """`with_absences`: trae también `Match.absences` (columna diferida) en la misma
-        consulta; sin ello, leer ese atributo en una sesión async falla."""
+        """`with_absences`: trae también `Match.absences` y `Match.manual_absences`
+        (columnas diferidas) en la misma consulta; sin ello, leer esos atributos en una
+        sesión async falla."""
         query = select(Match).where(Match.id == match_id)
         if with_absences:
-            query = query.options(undefer(Match.absences))
+            query = query.options(undefer(Match.absences), undefer(Match.manual_absences))
         result = await db.execute(query)
         return result.scalar_one_or_none()
+
+    async def set_manual_absence(
+        self, db: AsyncSession, match: Match, player_id: int, entry: dict | None
+    ) -> None:
+        """Fija (o, con `entry=None`, quita) la corrección manual de un jugador en un
+        partido cargado con `with_absences=True`. Una por jugador: la nueva sustituye a la
+        anterior. Se asigna una lista NUEVA: SQLAlchemy no detecta cambios hechos dentro
+        de un JSON ya cargado."""
+        others = [a for a in match.manual_absences or [] if a.get("player_id") != player_id]
+        match.manual_absences = others + ([entry] if entry is not None else [])
+        await db.flush()
 
     async def get_by_teams(self, db: AsyncSession, home_team: str, away_team: str) -> list[Match]:
         """Partidos entre esos dos equipos en CUALQUIER orden (backfill por nombres, sin

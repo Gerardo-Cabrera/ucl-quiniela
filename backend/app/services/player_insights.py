@@ -46,6 +46,9 @@ async def match_players(db: AsyncSession, match: Match, search: str | None = Non
     sancionados que salen de las tarjetas del partido anterior de cada equipo (la API no
     informa de los ciclos de amarillas; ver `services/suspensions.py`). Si un jugador
     figura en ambas, manda la sanción: no puede jugar aunque la API lo dé como duda.
+    Por encima de todo, lo que el admin haya corregido a mano (`match.manual_absences`):
+    el proveedor tarda en registrar las lesiones recientes, y "available" desmiente una
+    baja que no es tal.
 
     `search` filtra por nombre SIN alterar las marcas: el máximo goleador se decide
     sobre la plantilla completa."""
@@ -61,6 +64,13 @@ async def match_players(db: AsyncSession, match: Match, search: str | None = Non
         for player_id, reason in suspended_for_match(team, match.id, team_schedule).items():
             unavailable[player_id] = ("suspended", reason)
 
+    manual = {a["player_id"]: a for a in match.manual_absences or []}
+    for player_id, correction in manual.items():
+        if correction["status"] == "available":
+            unavailable.pop(player_id, None)
+        else:
+            unavailable[player_id] = (correction["status"], correction.get("reason"))
+
     if (search or "").strip():
         wanted = {p.api_player_id for p in await player_crud.get_for_teams(db, teams, name_query=search)}
         squad = [p for p in squad if p.api_player_id in wanted]
@@ -74,6 +84,7 @@ async def match_players(db: AsyncSession, match: Match, search: str | None = Non
             team_top_scorer=p.api_player_id in top,
             availability=status,
             availability_reason=reason,
+            availability_manual=p.api_player_id in manual,
         ))
     return result
 

@@ -73,6 +73,11 @@ class Match(Base):
     # status: "injured"|"suspended"|"doubtful"|"unavailable", reason}. Las refresca el job
     # de bajas mientras el partido no haya terminado. `deferred` por el mismo motivo.
     absences: Mapped[list[dict] | None] = mapped_column(JSON, nullable=True, deferred=True)
+    # Correcciones del admin sobre la disponibilidad de un jugador para ESTE partido:
+    # mismo formato que `absences`, y además `status: "available"` para desmentir una
+    # baja. El proveedor tarda en registrar las lesiones recientes; aquí el admin anota lo
+    # que ya se sabe. Columna aparte porque el job de bajas reemplaza `absences` entera.
+    manual_absences: Mapped[list[dict] | None] = mapped_column(JSON, nullable=True, deferred=True)
 
     # Probabilidad de victoria PRE-partido según API-Football (`/predictions`, `percent`
     # local/empate/visitante en % enteros). Solo se consulta para el PRÓXIMO partido de
