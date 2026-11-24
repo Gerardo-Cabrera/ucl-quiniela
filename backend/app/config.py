@@ -42,6 +42,14 @@ class Settings(BaseSettings):
     # reabre los pronósticos desde ese plazo hasta que arranca ese primer partido.
     PREDICTION_LEAD_MINUTES: int = 60
 
+    # Arrancar los jobs (sync con API-Football y cálculo de puntos) con la app. Solo UNA
+    # instancia debe tenerlos activos contra la misma BD: con `false`, la API funciona
+    # igual pero no sincroniza ni puntúa nada por su cuenta. Sirve para levantar una
+    # segunda instancia (p. ej. al mover el backend de región) y verificarla antes de
+    # apagar la anterior, y para desarrollar en local sin gastar cuota de la API. Los
+    # endpoints admin de sync siguen funcionando (lanzan el job a mano).
+    SCHEDULER_ENABLED: bool = True
+
     # Scheduler intervals.
     # Sync de fixtures ADAPTATIVO (ver sync_fixtures): la tarea corre cada
     # SYNC_FIXTURES_MINUTES pero solo llama a la API si hay un partido EN JUEGO

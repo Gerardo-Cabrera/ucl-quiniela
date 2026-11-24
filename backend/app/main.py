@@ -44,9 +44,16 @@ async def lifespan(app: FastAPI):
     except Exception:
         logger.exception("Fallo aplicando migraciones al arrancar; se aborta el inicio.")
         raise
-    await start_scheduler()
+    if settings.SCHEDULER_ENABLED:
+        await start_scheduler()
+    else:
+        logger.warning(
+            "Scheduler DESACTIVADO (SCHEDULER_ENABLED=false): esta instancia no sincroniza "
+            "con API-Football ni calcula puntos; debe hacerlo otra contra la misma BD."
+        )
     yield
-    stop_scheduler()
+    if settings.SCHEDULER_ENABLED:
+        stop_scheduler()
     await close_client()
     logger.info("UCL Quiniela API detenida.")
 
