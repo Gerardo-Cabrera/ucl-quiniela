@@ -45,6 +45,11 @@ def players_sync_in_progress() -> bool:
     return _players_sync_lock.locked()
 
 
+# Un solo relleno de tarjetas a la vez (job horario y/o el que encola el backfill admin):
+# dos solapados pedirían a la API los mismos partidos pendientes.
+_card_backfill_lock = asyncio.Lock()
+
+
 async def _retry(coro_func, job_name: str) -> tuple[bool, object]:
     """Ejecuta una coroutine con reintentos en caso de fallo. Devuelve
     `(ok, resultado)`: ok=False si agota los reintentos; resultado es lo que
@@ -404,9 +409,11 @@ async def _do_sync_absences() -> None:
     finalizar: una sola petición a `/injuries` trae las de toda la competición y cada
     partido se queda con su lista (`Match.absences`), que el selector de goleador usa
     para marcar a quien no va a jugar. Cada corrida REEMPLAZA la lista del partido (un
-    jugador recuperado deja de figurar). Si la API no devuelve ninguna baja se conserva
-    lo guardado: con decenas de partidos por jugar, cero es una respuesta anómala, no
-    una enfermería vacía."""
+    jugador recuperado deja de figurar): un partido que ya no aparece en la respuesta
+    queda sin bajas. Solo si la respuesta ENTERA viene vacía se conserva lo guardado: la
+    API devuelve las bajas de toda la temporada, también las de los partidos ya jugados,
+    así que cero entradas con la competición en marcha es una respuesta anómala, no una
+    enfermería vacía (los errores declarados ya los lanza `_extract_response`)."""
     by_fixture = ucl_api.parse_absences(await ucl_api.fetch_absences())
     if not by_fixture:
         logger.warning("Bajas: la API no devolvió ninguna; se conservan las guardadas.")
@@ -529,31 +536,53 @@ async def _do_backfill_card_events() -> None:
     no consulta: los 0-0 (sin primer gol que buscar) y los cerrados antes de existir este
     dato (el primer arranque tras desplegarlo los rellena todos). Solo escribe
     `card_events`: goles, primer gol y puntos de un partido ya cerrado NO se tocan aunque
-    los eventos de hoy difieran. Peticiones ESPACIADAS (`_fetch_paced`): en ráfaga la API
-    corta por límite por minuto (72 seguidas dejaron 10 sin datos). Sin sesión abierta
-    mientras se espera a la API. Lo que falle se reintenta en la siguiente corrida."""
-    async with AsyncSessionLocal() as db:
-        pending = (await db.execute(
-            select(Match.id, Match.api_fixture_id)
-            .where(Match.status == MatchStatus.FINISHED, Match.card_events.is_(None))
-            .order_by(Match.match_date)
-        )).all()
-    if not pending:
+    los eventos de hoy difieran.
+
+    Cuidados:
+    - Peticiones ESPACIADAS (`_fetch_paced`): en ráfaga la API corta por límite por minuto
+      (72 seguidas dejaron 10 sin datos). Sin sesión abierta mientras se espera a la API.
+    - Una sola corrida a la vez: la que llega con otra en curso se omite.
+    - Solo rellena lo que SIGUE vacío al escribir: si mientras esperaba a la API el job de
+      eventos guardó las tarjetas de ese partido, no se pisan con una foto más antigua.
+    - Una respuesta SIN eventos de un partido reciente no se da por buena (todo partido
+      tiene al menos cambios: es que la API aún no los publica); queda pendiente y se
+      reintenta hasta FIRST_GOAL_GRACE_HOURS. Pasado ese plazo se guarda vacío, para no
+      preguntar siempre por un partido del que la API no tiene eventos.
+    Lo que falle se reintenta en la siguiente corrida."""
+    if _card_backfill_lock.locked():
+        logger.info("Relleno de tarjetas omitido: ya hay uno en curso.")
         return
-    results = await _fetch_paced(ucl_api.fetch_fixture_events, [fixture_id for _, fixture_id in pending])
-    saved = 0
-    async with AsyncSessionLocal() as db:
-        for (match_id, fixture_id), events in zip(pending, results):
-            if isinstance(events, Exception):
-                logger.warning("No se pudieron obtener las tarjetas del fixture %s: %s", fixture_id, events)
-                continue
-            await db.execute(
-                update(Match).where(Match.id == match_id)
-                .values(card_events=ucl_api.parse_card_events(events))
-            )
-            saved += 1
-        await db.commit()
-    logger.info("Tarjetas guardadas de %d de %d partidos finalizados que no las tenían.", saved, len(pending))
+    async with _card_backfill_lock:
+        grace_cutoff = datetime.now(timezone.utc) - timedelta(hours=settings.FIRST_GOAL_GRACE_HOURS)
+        async with AsyncSessionLocal() as db:
+            pending = (await db.execute(
+                select(Match.id, Match.api_fixture_id, Match.match_date)
+                .where(Match.status == MatchStatus.FINISHED, Match.card_events.is_(None))
+                .order_by(Match.match_date)
+            )).all()
+        if not pending:
+            return
+        results = await _fetch_paced(ucl_api.fetch_fixture_events, [row.api_fixture_id for row in pending])
+        saved = waiting = 0
+        async with AsyncSessionLocal() as db:
+            for row, events in zip(pending, results):
+                if isinstance(events, Exception):
+                    logger.warning("No se pudieron obtener las tarjetas del fixture %s: %s", row.api_fixture_id, events)
+                    continue
+                if not events and as_utc(row.match_date) >= grace_cutoff:
+                    waiting += 1
+                    continue
+                result = await db.execute(
+                    update(Match)
+                    .where(Match.id == row.id, Match.card_events.is_(None))
+                    .values(card_events=ucl_api.parse_card_events(events))
+                )
+                saved += result.rowcount
+            await db.commit()
+        logger.info(
+            "Tarjetas guardadas de %d de %d partidos finalizados que no las tenían (%d aún sin eventos en la API).",
+            saved, len(pending), waiting,
+        )
 
 
 async def sync_first_goals():
