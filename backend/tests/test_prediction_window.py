@@ -18,6 +18,7 @@ from sqlalchemy import event, select
 
 from app.config import settings
 from app.core.time import tz_day
+from app.models.app_state import AppState
 from app.models.match import Match, MatchPhase, MatchStatus
 from app.models.prediction import Prediction
 from app.models.user import User
@@ -163,6 +164,40 @@ async def test_annotate_without_scheduled_matches_runs_no_query():
 
     assert flags == {finished: False}
     assert selects == 0
+
+
+# ── Estado global: leer nunca escribe ────────────────────────────────────────
+
+async def _app_state_rows() -> int:
+    async with TestSessionLocal() as session:
+        return len((await session.execute(select(AppState))).scalars().all())
+
+
+@pytest.mark.asyncio
+async def test_reading_the_global_state_never_creates_its_row(auth_client: AsyncClient):
+    """Las vistas que consultan el interruptor o el Top 8 real van por GET, en una sesión
+    de solo lectura: si la fila única falta, reciben los valores por defecto sin crearla."""
+    await _create_match()
+    assert (await auth_client.get("/api/matches/")).status_code == 200
+    assert (await auth_client.get("/api/predictions/")).status_code == 200
+    assert (await auth_client.get("/api/top8/actual")).json() == []
+    async with TestSessionLocal() as session:
+        assert await app_state_crud.get_prediction_override(session) is False
+        assert await app_state_crud.get_top8_actual(session) == []
+        assert await app_state_crud.get_squads_synced_at(session) is None
+    assert await _app_state_rows() == 0
+
+
+@pytest.mark.asyncio
+async def test_writing_the_global_state_creates_its_row_once():
+    async with TestSessionLocal() as session:
+        await app_state_crud.set_prediction_override(session, True)
+        await app_state_crud.set_top8_actual(session, ["Real Madrid"])
+        await session.commit()
+    assert await _app_state_rows() == 1
+    async with TestSessionLocal() as session:
+        assert await app_state_crud.get_prediction_override(session) is True
+        assert await app_state_crud.get_top8_actual(session) == ["Real Madrid"]
 
 
 # ── CRUD: partidos de jornadas ya iniciadas ──────────────────────────────────
