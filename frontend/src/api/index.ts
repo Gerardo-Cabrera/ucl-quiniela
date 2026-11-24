@@ -1,6 +1,6 @@
 import apiClient from "@/api/client";
 import type {
-  Match, Prediction, PredictionOverride, LeaderboardEntry, Top8Pick, Player,
+  Match, Prediction, PredictionOverride, LeaderboardEntry, Top8Pick, Player, ManualAvailability,
   TournamentPick, TournamentStats, StatsSummary, MatchdaysSummary, BackfillPayload,
 } from "@/types";
 
@@ -18,6 +18,18 @@ export const matchesApi = {
   },
   getPlayers: async (id: number): Promise<Player[]> => {
     const { data } = await apiClient.get(`/api/matches/${id}/players`);
+    return data;
+  },
+  // Admin: corregir a mano la disponibilidad de un jugador para ese partido. Ambas
+  // devuelven las plantillas del partido ya actualizadas.
+  setPlayerAvailability: async (
+    matchId: number, playerId: number, payload: { status: ManualAvailability; reason: string | null },
+  ): Promise<Player[]> => {
+    const { data } = await apiClient.put(`/api/matches/${matchId}/players/${playerId}/availability`, payload);
+    return data;
+  },
+  clearPlayerAvailability: async (matchId: number, playerId: number): Promise<Player[]> => {
+    const { data } = await apiClient.delete(`/api/matches/${matchId}/players/${playerId}/availability`);
     return data;
   },
 };

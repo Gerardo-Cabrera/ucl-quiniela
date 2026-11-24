@@ -3,7 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models.match import MatchPhase, MatchStatus
 from app.models.user import User
-from app.schemas import MatchOut, MatchPlayerOut
+from app.schemas import MatchOut, MatchPlayerOut, ManualAvailabilityUpdate
 from app.core.deps import get_current_user, get_admin_user
 from app.core.rate_limit import limiter
 from app.config import settings
@@ -13,7 +13,7 @@ from app.services.scheduler import (
 )
 from app.services.prediction_window import annotate_predictable
 from app.services.player_insights import match_players
-from app.crud import match_crud
+from app.crud import match_crud, player_crud
 
 router = APIRouter(prefix="/matches", tags=["Matches"])
 
@@ -67,6 +67,65 @@ async def get_match_players(
     if not match:
         raise HTTPException(status_code=404, detail="Partido no encontrado.")
     return await match_players(db, match, search)
+
+
+async def _match_and_player(db: AsyncSession, match_id: int, player_id: int):
+    """Partido (con sus bajas cargadas y la fila BLOQUEADA hasta el commit, para que dos
+    correcciones simultáneas no se pisen) y jugador de una corrección manual; el jugador
+    debe pertenecer a uno de los dos equipos del partido."""
+    match = await match_crud.get_by_id(db, match_id, with_absences=True, for_update=True)
+    if not match:
+        raise HTTPException(status_code=404, detail="Partido no encontrado.")
+    player = await player_crud.get_by_api_id(db, player_id)
+    if player is None or player.team_name not in (match.home_team, match.away_team):
+        raise HTTPException(
+            status_code=400,
+            detail=f"El jugador {player_id} no pertenece a {match.home_team} ni {match.away_team}.",
+        )
+    return match, player
+
+
+@router.put(
+    "/{match_id}/players/{player_id}/availability",
+    response_model=list[MatchPlayerOut],
+    summary="Admin: corregir a mano la disponibilidad de un jugador",
+)
+async def set_player_availability(
+    match_id: int,
+    player_id: int,
+    data: ManualAvailabilityUpdate,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_admin_user),
+):
+    """Fija a mano el estado de un jugador para ESTE partido: una baja (lesionado,
+    sancionado, duda, no disponible) que el proveedor aún no ha registrado, o
+    `available` para desmentir la que digan la API o las tarjetas. Manda sobre los datos
+    automáticos y el job de bajas no la pisa; se quita con DELETE. Devuelve las plantillas
+    del partido ya actualizadas."""
+    match, player = await _match_and_player(db, match_id, player_id)
+    await match_crud.set_manual_absence(db, match, player_id, {
+        "player_id": player.api_player_id, "player": player.name, "team": player.team_name,
+        "status": data.status, "reason": data.reason,
+    })
+    return await match_players(db, match)
+
+
+@router.delete(
+    "/{match_id}/players/{player_id}/availability",
+    response_model=list[MatchPlayerOut],
+    summary="Admin: quitar la corrección manual de un jugador",
+)
+async def clear_player_availability(
+    match_id: int,
+    player_id: int,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_admin_user),
+):
+    """Quita la corrección manual: el jugador vuelve a mostrar lo que digan la API y las
+    tarjetas. Devuelve las plantillas del partido ya actualizadas."""
+    match, _player = await _match_and_player(db, match_id, player_id)
+    await match_crud.set_manual_absence(db, match, player_id, None)
+    return await match_players(db, match)
 
 
 @router.post("/sync", status_code=202, summary="Admin: Forzar sync con API-Football")

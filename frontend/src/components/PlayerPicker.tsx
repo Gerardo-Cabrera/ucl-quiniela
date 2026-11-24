@@ -1,10 +1,12 @@
 import { useState } from "react";
-import { Check, Search, X } from "lucide-react";
+import { Check, Pencil, Search, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { clsx } from "clsx";
 import type { Player } from "@/types";
 import { groupSquad } from "@/lib/players";
 import { TeamLogo } from "@/components/ui";
+import { useAuthStore } from "@/store/authStore";
+import { AvailabilityEditor } from "@/components/AvailabilityEditor";
 import {
   AvailabilityBadge, GoalsBadge, PlayerLegend,
   availabilityLabel, availabilityTextClass, isOut, playerNotes,
@@ -18,8 +20,14 @@ interface TeamRef {
 interface Props {
   players: Player[];
   teams: [TeamRef, TeamRef];   // local, visitante
-  value: number | null;
-  onChange: (id: number | null) => void;
+  /** Goleador elegido y cómo cambiarlo. Se omiten en el modo `editOnly`. */
+  value?: number | null;
+  onChange?: (id: number | null) => void;
+  /** Partido de estas plantillas: con él, el admin puede corregir a mano la disponibilidad. */
+  matchId?: number;
+  /** Solo corregir bajas (modal de bajas del admin): no se elige goleador y tocar a un
+   *  jugador abre siempre su estado. */
+  editOnly?: boolean;
 }
 
 /** Selector visual del primer goleador: pestañas de equipo (con escudo), filtro
@@ -32,27 +40,41 @@ interface Props {
  *  de su equipo) y abajo a la izquierda si es baja para este partido (sancionado,
  *  lesionado, duda o no disponible; quien se lo pierde sale atenuado). Son marcas
  *  superpuestas: ninguna celda cambia de tamaño. Una baja se puede elegir igualmente
- *  (el dato puede ir con retraso); al hacerlo, el aviso queda junto al nombre. */
-export function PlayerPicker({ players, teams, value, onChange }: Props) {
+ *  (el dato puede ir con retraso); al hacerlo, el aviso queda junto al nombre.
+ *
+ *  Solo el admin ve además «Corregir bajas»: con ese modo activo, tocar a un jugador no
+ *  lo elige como goleador sino que abre su estado para corregirlo (AvailabilityEditor).
+ *  Con `editOnly` (modal de bajas, abierto desde la tarjeta del partido) ese modo es el
+ *  único: no hay goleador que elegir. */
+export function PlayerPicker({ players, teams, value = null, onChange, matchId, editOnly = false }: Props) {
   const { t } = useTranslation();
+  const isAdmin = useAuthStore((s) => s.user?.is_admin ?? false);
+  const canEdit = isAdmin && matchId != null;
   const [team, setTeam]   = useState(teams[0].name);
   const [query, setQuery] = useState("");
+  const [editToggle, setEditToggle] = useState(false);        // modo «Corregir bajas» (admin)
+  const editing = editOnly || editToggle;
+  const [targetId, setTargetId] = useState<number | null>(null);
+  const target = players.find((p) => p.api_player_id === targetId);
   const q = query.trim().toLowerCase();
   const selected = players.find((p) => p.api_player_id === value);
   const pool   = q ? players.filter((p) => p.name.toLowerCase().includes(q)) : players;
   const squads = groupSquad(pool, q ? teams.map((x) => x.name) : [team]);
 
-  // Columna flex: dentro del modal (de altura limitada) solo la cuadrícula cede y se
-  // desplaza; pestañas, filtro y leyenda quedan fijos.
+  // `contents`: los bloques del selector son hijos directos de la columna flex del modal.
+  // Solo la cuadrícula puede ceder altura (hasta su mínimo, con desplazamiento propio);
+  // el resto conserva la suya. Mientras el admin corrige a un jugador, su editor ocupa el
+  // sitio de la cuadrícula y de la leyenda.
+  const correcting = canEdit && editing && !!target;
   return (
-    <div className="min-h-0 flex flex-col gap-3">
+    <div className="contents">
       {selected && (
-        <div className="flex items-center gap-2 text-sm">
+        <div className="mb-3 flex items-center gap-2 text-sm">
           <span className="text-ucl-silver/60">{t("predictionModal.picked")}</span>
           <span className="text-ucl-gold font-medium truncate">{selected.name}</span>
           <button
             type="button"
-            onClick={() => onChange(null)}
+            onClick={() => onChange?.(null)}
             aria-label={t("common.close")}
             className="text-ucl-silver/50 hover:text-red-400 transition-colors"
           >
@@ -62,14 +84,14 @@ export function PlayerPicker({ players, teams, value, onChange }: Props) {
       )}
       {/* Elegir a una baja no se impide, pero se avisa (en móvil no hay tooltip). */}
       {selected?.availability && (
-        <p role="status" className={clsx("-mt-2 text-xs", availabilityTextClass(selected.availability))}>
+        <p role="status" className={clsx("-mt-2 mb-3 text-xs", availabilityTextClass(selected.availability))}>
           {t(isOut(selected) ? "playerMarks.pickedWarningOut" : "playerMarks.pickedWarningDoubt",
              { status: availabilityLabel(selected, t) })}
         </p>
       )}
 
       {/* Pestañas de equipo */}
-      <div className="grid grid-cols-2 gap-2">
+      <div className="mb-3 grid grid-cols-2 gap-2">
         {teams.map((tm) => (
           <button
             type="button"
@@ -89,7 +111,7 @@ export function PlayerPicker({ players, teams, value, onChange }: Props) {
       </div>
 
       {/* Filtro por nombre (opcional) */}
-      <div className="relative">
+      <div className="mb-3 relative">
         <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-ucl-silver/40" />
         <input
           type="text"
@@ -100,10 +122,38 @@ export function PlayerPicker({ players, teams, value, onChange }: Props) {
         />
       </div>
 
-      <PlayerLegend players={players} />
+      {!correcting && <PlayerLegend players={players} className="mb-3" />}
+
+      {canEdit && (
+        <div className="mb-3 flex items-center gap-2">
+          {!editOnly && (
+            <button
+              type="button"
+              aria-pressed={editing}
+              onClick={() => { setEditToggle((on) => !on); setTargetId(null); }}
+              className={clsx(
+                "inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-3 py-1 text-xs transition-colors",
+                editing ? "border-ucl-gold bg-ucl-gold/10 text-ucl-gold"
+                        : "border-ucl-blue/60 text-ucl-silver hover:border-ucl-gold/60",
+              )}
+            >
+              <Pencil size={12} /> {t("playerMarks.editToggle")}
+            </button>
+          )}
+          {editing && !target && <span className="min-w-0 text-[11px] leading-tight text-ucl-silver/60">{t("playerMarks.editHint")}</span>}
+        </div>
+      )}
+      {correcting && (
+        <AvailabilityEditor
+          key={target.api_player_id}
+          matchId={matchId}
+          player={target}
+          onClose={() => setTargetId(null)}
+        />
+      )}
 
       {/* Cuadrícula de fotos por posición */}
-      <div className="min-h-24 max-h-64 overflow-y-auto pr-1 space-y-3">
+      <div className={clsx("mb-6 min-h-24 max-h-64 overflow-y-auto pr-1 space-y-3", correcting && "hidden")}>
         {squads.length === 0 && (
           <p className="text-sm text-ucl-silver/40 italic">{t("predictionModal.noMatches")}</p>
         )}
@@ -127,10 +177,13 @@ export function PlayerPicker({ players, teams, value, onChange }: Props) {
                         aria-pressed={isSelected}
                         aria-label={notes}
                         title={notes}
-                        onClick={() => onChange(isSelected ? null : p.api_player_id)}
+                        onClick={() => (editing && canEdit
+                          ? setTargetId(p.api_player_id)
+                          : onChange?.(isSelected ? null : p.api_player_id))}
                         className={clsx(
                           "flex flex-col items-center gap-1 rounded-lg p-1.5 min-w-0 transition-colors",
                           isSelected ? "bg-ucl-gold/15" : "hover:bg-ucl-blue/30",
+                          editing && targetId === p.api_player_id && "ring-1 ring-ucl-gold",
                         )}
                       >
                         <span className="relative">

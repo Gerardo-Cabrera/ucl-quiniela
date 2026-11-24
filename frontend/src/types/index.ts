@@ -63,6 +63,9 @@ export interface PredictionOverride {
 /** Baja o duda de un jugador para un partido (bajas de API-Football). */
 export type PlayerAvailability = "injured" | "suspended" | "doubtful" | "unavailable";
 
+/** Lo que el admin puede fijar a mano: una baja, o "available" para desmentirla. */
+export type ManualAvailability = PlayerAvailability | "available";
+
 export interface Player {
   api_player_id: number;
   name: string;
@@ -75,6 +78,7 @@ export interface Player {
   team_top_scorer?: boolean;       // máximo goleador de su equipo (≥1 gol; empatados, todos)
   availability?: PlayerAvailability | null;   // baja para ESE partido (solo plantillas de un partido)
   availability_reason?: string | null;        // motivo en el vocabulario de la API (se traduce: absenceReason.*)
+  availability_manual?: boolean;              // lo fijó el admin a mano (manda sobre lo automático)
 }
 
 export interface Prediction {

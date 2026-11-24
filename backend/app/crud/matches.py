@@ -37,16 +37,41 @@ class MatchCRUD:
         result = await db.execute(query)
         return list(result.scalars().all())
 
-    async def get_by_id(
-        self, db: AsyncSession, match_id: int, *, with_absences: bool = False
-    ) -> Match | None:
-        """`with_absences`: trae también `Match.absences` (columna diferida) en la misma
-        consulta; sin ello, leer ese atributo en una sesión async falla."""
+    @staticmethod
+    def by_id_query(match_id: int, *, with_absences: bool = False, for_update: bool = False):
+        """Consulta de un partido por id (ver `get_by_id`)."""
         query = select(Match).where(Match.id == match_id)
         if with_absences:
-            query = query.options(undefer(Match.absences))
-        result = await db.execute(query)
+            query = query.options(undefer(Match.absences), undefer(Match.manual_absences))
+        if for_update:
+            query = query.with_for_update()
+        return query
+
+    async def get_by_id(
+        self, db: AsyncSession, match_id: int, *, with_absences: bool = False, for_update: bool = False
+    ) -> Match | None:
+        """`with_absences`: trae también `Match.absences` y `Match.manual_absences`
+        (columnas diferidas) en la misma consulta; sin ello, leer esos atributos en una
+        sesión async falla.
+        `for_update`: bloquea la fila hasta el fin de la transacción (`SELECT ... FOR
+        UPDATE`). Para leer-modificar-escribir un JSON del partido sin que dos peticiones
+        simultáneas partan de la misma lectura y la segunda pise a la primera."""
+        result = await db.execute(
+            self.by_id_query(match_id, with_absences=with_absences, for_update=for_update)
+        )
         return result.scalar_one_or_none()
+
+    async def set_manual_absence(
+        self, db: AsyncSession, match: Match, player_id: int, entry: dict | None
+    ) -> None:
+        """Fija (o, con `entry=None`, quita) la corrección manual de un jugador en un
+        partido cargado con `with_absences=True` y `for_update=True` (la lista entera se
+        reescribe: sin el bloqueo, dos correcciones simultáneas de jugadores distintos se
+        pisarían). Una por jugador: la nueva sustituye a la anterior. Se asigna una lista
+        NUEVA: SQLAlchemy no detecta cambios hechos dentro de un JSON ya cargado."""
+        others = [a for a in match.manual_absences or [] if a.get("player_id") != player_id]
+        match.manual_absences = others + ([entry] if entry is not None else [])
+        await db.flush()
 
     async def get_by_teams(self, db: AsyncSession, home_team: str, away_team: str) -> list[Match]:
         """Partidos entre esos dos equipos en CUALQUIER orden (backfill por nombres, sin
