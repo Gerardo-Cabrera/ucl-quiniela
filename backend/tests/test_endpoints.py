@@ -1464,6 +1464,18 @@ async def test_health(client: AsyncClient):
 
 
 @pytest.mark.asyncio
+async def test_health_tells_whether_this_instance_runs_the_jobs(client: AsyncClient, monkeypatch):
+    """`scheduler_running` permite saber desde fuera qué instancia sincroniza y puntúa
+    (debe ser exactamente una entre las que comparten la BD)."""
+    from types import SimpleNamespace
+    import app.main as main
+
+    assert (await client.get("/health")).json()["scheduler_running"] is False   # la suite no arranca los jobs
+    monkeypatch.setattr(main, "scheduler", SimpleNamespace(running=True))
+    assert (await client.get("/health")).json() == {"status": "ok", "scheduler_running": True}
+
+
+@pytest.mark.asyncio
 async def test_health_db_reports_the_roundtrip(client: AsyncClient):
     """`/health/db` sí toca la BD y devuelve lo que tarda un viaje (dato para decidir si
     backend y BD están lo bastante cerca); `/health` sigue sin tocarla."""

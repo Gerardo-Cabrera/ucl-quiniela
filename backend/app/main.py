@@ -22,7 +22,7 @@ from app.routers import (
     matchdays_router,
     tournament_router,
 )
-from app.services.scheduler import start_scheduler, stop_scheduler
+from app.services.scheduler import scheduler, start_scheduler, stop_scheduler
 from app.services.ucl_api import close_client
 from app.core.migrations import run_migrations
 import asyncio
@@ -116,7 +116,12 @@ async def root():
 
 @app.get("/health", tags=["Health"])
 async def health():
-    return {"status": "ok"}
+    """Vida del proceso (no toca la BD: es el que usan el keep-alive y los monitores).
+    `scheduler_running` dice si ESTA instancia tiene activos los jobs (sync con
+    API-Football y cálculo de puntos). Entre todas las instancias que comparten la BD debe
+    haber exactamente UNA con `true`: con ninguna, los marcadores no se actualizan ni se
+    puntúa; con dos, el trabajo se hace doble. Antes solo se podía saber leyendo los logs."""
+    return {"status": "ok", "scheduler_running": scheduler.running}
 
 
 # Diagnóstico puntual, público y que toma una conexión del pool: unas pocas llamadas por
